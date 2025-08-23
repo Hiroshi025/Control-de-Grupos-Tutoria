@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { LoginForm } from "@/components/auth/login-form";
 
 export default function LoginPage() {
@@ -10,7 +12,9 @@ export default function LoginPage() {
             Instituto Tecnológico Superior del Occidente del Estado de Hidalgo
           </p>
         </div>
-        <LoginForm />
+        <Suspense fallback={<div>Cargando...</div>}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );
