@@ -1,52 +1,89 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Calendar, Users, User, ChevronRight } from "lucide-react"
-import { useEffect, useState } from "react"
+import { Calendar, ChevronRight, User, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { createClient } from "@/lib/auth-client";
 
 interface MisTutoriasProps {
-  alumnoId: string
+  alumnoId: string;
 }
 
 interface SesionTutoria {
-  id: string
-  fecha_sesion: string
-  tipo: "grupal" | "individual"
-  objetivos?: string
-  acuerdos_compromisos?: string
-  profesor_nombre: string
+  id: string;
+  fecha_sesion: string;
+  tipo: "grupal" | "individual";
+  objetivos?: string;
+  acuerdos_compromisos?: string;
+  profesor_nombre: string;
 }
 
 export function MisTutorias({ alumnoId }: MisTutoriasProps) {
-  const [sesiones, setSesiones] = useState<SesionTutoria[]>([])
-  const [loading, setLoading] = useState(true)
+  const [sesiones, setSesiones] = useState<SesionTutoria[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulamos la carga de sesiones de tutoría
-    setTimeout(() => {
-      setSesiones([
-        {
-          id: "1",
-          fecha_sesion: "2024-01-15T14:00:00Z",
-          tipo: "grupal",
-          objetivos: "Revisión de avance académico del primer parcial",
-          acuerdos_compromisos: "Mejorar asistencia a clases de matemáticas",
-          profesor_nombre: "Dr. Juan Carlos Pérez",
-        },
-        {
-          id: "2",
-          fecha_sesion: "2024-01-08T15:00:00Z",
-          tipo: "individual",
-          objetivos: "Seguimiento personalizado de materias en recurso",
-          acuerdos_compromisos: "Presentar plan de estudio para recuperación",
-          profesor_nombre: "Dr. Juan Carlos Pérez",
-        },
-      ])
-      setLoading(false)
-    }, 1000)
-  }, [alumnoId])
+    async function fetchSesiones() {
+      setLoading(true);
+      try {
+        const supabase = createClient();
+        // Buscar sesiones individuales y grupales del alumno
+        const { data: sesionesData, error } = await supabase
+          .from("sesiones_tutoria")
+          .select(
+            "id, fecha_sesion, tipo, objetivos, acuerdos_compromisos, profesor_id"
+          )
+          .or(`alumno_id.eq.${alumnoId},tipo.eq.grupal`)
+          .order("fecha_sesion", { ascending: false });
+
+        if (!sesionesData || error) {
+          setSesiones([]);
+          setLoading(false);
+          return;
+        }
+
+        // Obtener nombres de profesores
+        const profesorIds = [
+          ...new Set(sesionesData.map((s: any) => s.profesor_id)),
+        ];
+        let profesoresMap: Record<string, string> = {};
+        if (profesorIds.length > 0) {
+          const { data: profesores } = await supabase
+            .from("profesores")
+            .select("id, nombre_completo")
+            .in("id", profesorIds);
+          profesoresMap = (profesores || []).reduce((acc: any, prof: any) => {
+            acc[prof.id] = prof.nombre_completo;
+            return acc;
+          }, {});
+        }
+
+        setSesiones(
+          sesionesData.map((sesion: any) => ({
+            id: sesion.id,
+            fecha_sesion: sesion.fecha_sesion,
+            tipo: sesion.tipo,
+            objetivos: sesion.objetivos,
+            acuerdos_compromisos: sesion.acuerdos_compromisos,
+            profesor_nombre: profesoresMap[sesion.profesor_id] || "Tutor",
+          }))
+        );
+      } catch (err) {
+        setSesiones([]);
+      }
+      setLoading(false);
+    }
+    fetchSesiones();
+  }, [alumnoId]);
 
   if (loading) {
     return (
@@ -61,22 +98,29 @@ export function MisTutorias({ alumnoId }: MisTutoriasProps) {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Mis Tutorías</CardTitle>
-        <CardDescription>Historial de sesiones y acuerdos establecidos</CardDescription>
+        <CardDescription>
+          Historial de sesiones y acuerdos establecidos
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {sesiones.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">No hay sesiones de tutoría registradas</p>
+          <p className="text-muted-foreground text-center py-8">
+            No hay sesiones de tutoría registradas
+          </p>
         ) : (
           <div className="space-y-4">
             {sesiones.map((sesion) => (
-              <div key={sesion.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+              <div
+                key={sesion.id}
+                className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+              >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
                     {sesion.tipo === "grupal" ? (
@@ -84,7 +128,11 @@ export function MisTutorias({ alumnoId }: MisTutoriasProps) {
                     ) : (
                       <User className="h-4 w-4 text-muted-foreground" />
                     )}
-                    <Badge variant={sesion.tipo === "grupal" ? "secondary" : "outline"}>
+                    <Badge
+                      variant={
+                        sesion.tipo === "grupal" ? "secondary" : "outline"
+                      }
+                    >
                       {sesion.tipo === "grupal" ? "Grupal" : "Individual"}
                     </Badge>
                   </div>
@@ -99,16 +147,22 @@ export function MisTutorias({ alumnoId }: MisTutoriasProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <p className="font-medium text-sm">{sesion.profesor_nombre}</p>
+                  <p className="font-medium text-sm">
+                    {sesion.profesor_nombre}
+                  </p>
                   {sesion.objetivos && (
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground">Objetivos:</p>
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Objetivos:
+                      </p>
                       <p className="text-sm">{sesion.objetivos}</p>
                     </div>
                   )}
                   {sesion.acuerdos_compromisos && (
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground">Acuerdos:</p>
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Acuerdos:
+                      </p>
                       <p className="text-sm">{sesion.acuerdos_compromisos}</p>
                     </div>
                   )}
@@ -128,5 +182,5 @@ export function MisTutorias({ alumnoId }: MisTutoriasProps) {
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

@@ -205,3 +205,37 @@ Para soporte técnico o consultas sobre el sistema, contactar al administrador d
 
 **Versión**: 1.0.0  
 **Última actualización**: Enero 2025
+
+## 🆕 Lógica y Mecánica de Reporte Académico por Parcial
+
+### Reporte Proactivo de Materias Reprobadas
+
+- **Cada alumno debe realizar 3 reportes por semestre**, uno por cada parcial (Parcial 1, 2 y 3).
+- El reporte puede realizarse mediante un formulario web o cargando un archivo Excel desde el dashboard del alumno.
+- Cada reporte incluye: materia reprobada, motivo, profesor y parcial correspondiente.
+
+### Procesamiento y Actualización de Estado Académico
+
+- **Al finalizar el tercer reporte (Parcial 3):**
+  - Las materias aprobadas y reprobadas se descuentan de la carga académica total de la carrera.
+  - El sistema actualiza automáticamente los datos del alumno:
+    - Materias aprobadas
+    - Materias en recurso
+    - Materias en especial
+    - Materias sin cursar
+- **Regla especial:** Si una materia es reportada como reprobada por segunda vez (en dos semestres distintos), se marca como "especial" para el semestre siguiente y se notifica al tutor.
+
+### Flujo de Reporte
+
+1. **Captura del reporte:** El alumno registra materias reprobadas por parcial.
+2. **Validación:** El sistema verifica que no se excedan los 3 reportes por semestre.
+3. **Procesamiento final:** Al enviar el tercer reporte, el sistema:
+   - Actualiza el avance académico del alumno.
+   - Marca materias como "especial" si han sido reprobadas dos veces.
+   - Notifica automáticamente al tutor sobre materias en especial y riesgo académico.
+
+### Ejemplo de Uso
+
+- El alumno reporta en cada parcial las materias reprobadas.
+- Al finalizar el semestre, el sistema ajusta la carga académica y el historial del alumno.
+- Si una materia es reprobada dos veces, se considera especial y requiere atención adicional en el siguiente semestre.

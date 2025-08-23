@@ -1,88 +1,121 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Calendar, Clock, Users, User, Plus } from "lucide-react"
-import { useEffect, useState } from "react"
+import { Calendar, Clock, Plus, User, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { createClient } from "@/lib/auth-client";
 
 interface CalendarioSesionesProps {
-  grupoId: string
+  grupoId: string;
 }
 
 interface SesionAgendada {
-  id: string
-  fecha_sesion: string
-  tipo: "grupal" | "individual"
-  objetivos?: string
-  alumno_nombre?: string
-  estado: "programada" | "completada" | "cancelada"
+  id: string;
+  fecha_sesion: string;
+  tipo: "grupal" | "individual";
+  objetivos?: string;
+  alumno_nombre?: string;
+  estado: "programada" | "completada" | "cancelada";
 }
 
 export function CalendarioSesiones({ grupoId }: CalendarioSesionesProps) {
-  const [sesiones, setSesiones] = useState<SesionAgendada[]>([])
-  const [loading, setLoading] = useState(true)
+  const [sesiones, setSesiones] = useState<SesionAgendada[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulamos la carga de sesiones agendadas
-    setTimeout(() => {
-      setSesiones([
-        {
-          id: "1",
-          fecha_sesion: "2024-01-22T14:00:00Z",
-          tipo: "grupal",
-          objetivos: "Revisión de avance del segundo parcial",
-          estado: "programada",
-        },
-        {
-          id: "2",
-          fecha_sesion: "2024-01-24T15:00:00Z",
-          tipo: "individual",
-          objetivos: "Seguimiento personalizado de materias en recurso",
-          alumno_nombre: "Carlos Mendoza Ruiz",
-          estado: "programada",
-        },
-        {
-          id: "3",
-          fecha_sesion: "2024-01-15T14:00:00Z",
-          tipo: "grupal",
-          objetivos: "Revisión de avance del primer parcial",
-          estado: "completada",
-        },
-      ])
-      setLoading(false)
-    }, 1000)
-  }, [grupoId])
+    async function fetchSesiones() {
+      setLoading(true);
+      try {
+        const supabase = createClient();
+        // Obtener sesiones de tutoría del grupo
+        const { data: sesionesData, error } = await supabase
+          .from("sesiones_tutoria")
+          .select("id, fecha_sesion, tipo, objetivos, alumno_id, estado")
+          .eq("grupo_id", grupoId)
+          .order("fecha_sesion", { ascending: true });
+
+        if (!sesionesData || error) {
+          setSesiones([]);
+          setLoading(false);
+          return;
+        }
+
+        // Obtener nombres de alumnos para sesiones individuales
+        const alumnoIds = sesionesData
+          .filter((s: any) => s.tipo === "individual" && s.alumno_id)
+          .map((s: any) => s.alumno_id);
+        let alumnosMap: Record<string, string> = {};
+        if (alumnoIds.length > 0) {
+          const { data: alumnos } = await supabase
+            .from("alumnos")
+            .select("id, nombre_completo")
+            .in("id", alumnoIds);
+          alumnosMap = (alumnos || []).reduce((acc: any, alumno: any) => {
+            acc[alumno.id] = alumno.nombre_completo;
+            return acc;
+          }, {});
+        }
+
+        setSesiones(
+          sesionesData.map((sesion: any) => ({
+            id: sesion.id,
+            fecha_sesion: sesion.fecha_sesion,
+            tipo: sesion.tipo,
+            objetivos: sesion.objetivos,
+            alumno_nombre:
+              sesion.tipo === "individual" && sesion.alumno_id
+                ? alumnosMap[sesion.alumno_id]
+                : undefined,
+            estado: sesion.estado || "programada",
+          }))
+        );
+      } catch (err) {
+        setSesiones([]);
+      }
+      setLoading(false);
+    }
+    fetchSesiones();
+  }, [grupoId]);
 
   const sesionesOrdenadas = sesiones.sort(
-    (a, b) => new Date(a.fecha_sesion).getTime() - new Date(b.fecha_sesion).getTime(),
-  )
+    (a, b) =>
+      new Date(a.fecha_sesion).getTime() - new Date(b.fecha_sesion).getTime()
+  );
 
   const getEstadoColor = (estado: string) => {
     switch (estado) {
       case "programada":
-        return "default"
+        return "default";
       case "completada":
-        return "secondary"
+        return "secondary";
       case "cancelada":
-        return "destructive"
+        return "destructive";
       default:
-        return "outline"
+        return "outline";
     }
-  }
+  };
 
   const getEstadoText = (estado: string) => {
     switch (estado) {
       case "programada":
-        return "Programada"
+        return "Programada";
       case "completada":
-        return "Completada"
+        return "Completada";
       case "cancelada":
-        return "Cancelada"
+        return "Cancelada";
       default:
-        return estado
+        return estado;
     }
-  }
+  };
 
   return (
     <Card>
@@ -90,7 +123,9 @@ export function CalendarioSesiones({ grupoId }: CalendarioSesionesProps) {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Calendario de Sesiones</CardTitle>
-            <CardDescription>Sesiones programadas y completadas</CardDescription>
+            <CardDescription>
+              Sesiones programadas y completadas
+            </CardDescription>
           </div>
           <Button>
             <Plus className="h-4 w-4 mr-2" />
@@ -119,7 +154,10 @@ export function CalendarioSesiones({ grupoId }: CalendarioSesionesProps) {
         ) : (
           <div className="space-y-4">
             {sesionesOrdenadas.map((sesion) => (
-              <div key={sesion.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+              <div
+                key={sesion.id}
+                className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+              >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-4">
                     <div className="h-12 w-12 bg-primary/10 rounded-lg flex items-center justify-center">
@@ -133,27 +171,37 @@ export function CalendarioSesiones({ grupoId }: CalendarioSesionesProps) {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <h3 className="font-medium">
-                          {sesion.tipo === "grupal" ? "Sesión Grupal" : "Sesión Individual"}
+                          {sesion.tipo === "grupal"
+                            ? "Sesión Grupal"
+                            : "Sesión Individual"}
                         </h3>
-                        <Badge variant={getEstadoColor(sesion.estado)}>{getEstadoText(sesion.estado)}</Badge>
+                        <Badge variant={getEstadoColor(sesion.estado)}>
+                          {getEstadoText(sesion.estado)}
+                        </Badge>
                       </div>
 
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
-                          {new Date(sesion.fecha_sesion).toLocaleDateString("es-MX", {
-                            weekday: "long",
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                          })}
+                          {new Date(sesion.fecha_sesion).toLocaleDateString(
+                            "es-MX",
+                            {
+                              weekday: "long",
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            }
+                          )}
                         </div>
                         <div className="flex items-center gap-1">
                           <Clock className="h-4 w-4" />
-                          {new Date(sesion.fecha_sesion).toLocaleTimeString("es-MX", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {new Date(sesion.fecha_sesion).toLocaleTimeString(
+                            "es-MX",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
                         </div>
                       </div>
 
@@ -163,7 +211,9 @@ export function CalendarioSesiones({ grupoId }: CalendarioSesionesProps) {
                         </p>
                       )}
 
-                      {sesion.objetivos && <p className="text-sm">{sesion.objetivos}</p>}
+                      {sesion.objetivos && (
+                        <p className="text-sm">{sesion.objetivos}</p>
+                      )}
                     </div>
                   </div>
 
@@ -191,5 +241,5 @@ export function CalendarioSesiones({ grupoId }: CalendarioSesionesProps) {
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

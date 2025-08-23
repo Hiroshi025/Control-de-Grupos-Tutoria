@@ -1,100 +1,118 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { AlertTriangle, Search, Eye, Calendar } from "lucide-react"
-import { useEffect, useState } from "react"
+import { AlertTriangle, Calendar, Eye, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { createClient } from "@/lib/auth-client";
 
 interface ListaAlumnosProps {
-  grupoId: string
+  grupoId: string;
 }
 
 interface Alumno {
-  id: string
-  matricula: string
-  nombre_completo: string
-  semestre_actual: number
-  foto_credencial?: string
-  materias_en_recurso: number
-  materias_aprobadas: number
-  servicio_social_realizado: boolean
-  residencia_profesional_realizada: boolean
-  riesgo_nivel: "alto" | "medio" | "bajo"
+  id: string;
+  matricula: string;
+  nombre_completo: string;
+  semestre_actual: number;
+  foto_credencial?: string;
+  materias_en_recurso: number;
+  materias_aprobadas: number;
+  servicio_social_realizado: boolean;
+  residencia_profesional_realizada: boolean;
+  riesgo_nivel: "alto" | "medio" | "bajo";
 }
 
 export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
-  const [alumnos, setAlumnos] = useState<Alumno[]>([])
-  const [filtro, setFiltro] = useState("")
-  const [loading, setLoading] = useState(true)
+  const [alumnos, setAlumnos] = useState<Alumno[]>([]);
+  const [filtro, setFiltro] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulamos la carga de alumnos del grupo
-    setTimeout(() => {
-      setAlumnos([
-        {
-          id: "1",
-          matricula: "20240001",
-          nombre_completo: "Ana García López",
-          semestre_actual: 1,
-          materias_en_recurso: 0,
-          materias_aprobadas: 5,
-          servicio_social_realizado: false,
-          residencia_profesional_realizada: false,
-          riesgo_nivel: "bajo",
-        },
-        {
-          id: "2",
-          matricula: "20240002",
-          nombre_completo: "Carlos Mendoza Ruiz",
-          semestre_actual: 1,
-          materias_en_recurso: 4,
-          materias_aprobadas: 2,
-          servicio_social_realizado: false,
-          residencia_profesional_realizada: false,
-          riesgo_nivel: "alto",
-        },
-        {
-          id: "3",
-          matricula: "20240003",
-          nombre_completo: "María Elena Sánchez",
-          semestre_actual: 1,
-          materias_en_recurso: 1,
-          materias_aprobadas: 4,
-          servicio_social_realizado: false,
-          residencia_profesional_realizada: false,
-          riesgo_nivel: "medio",
-        },
-      ])
-      setLoading(false)
-    }, 1000)
-  }, [grupoId])
+    async function fetchAlumnos() {
+      setLoading(true);
+      try {
+        const supabase = createClient();
+        // Buscar alumnos activos en el grupo
+        const { data: alumnoGrupo, error: errorGrupo } = await supabase
+          .from("alumno_grupo")
+          .select("alumno_id")
+          .eq("grupo_id", grupoId)
+          .eq("activo", true);
+        if (!alumnoGrupo || errorGrupo) {
+          setAlumnos([]);
+          setLoading(false);
+          return;
+        }
+        const alumnoIds = alumnoGrupo.map((ag: any) => ag.alumno_id);
+        if (alumnoIds.length === 0) {
+          setAlumnos([]);
+          setLoading(false);
+          return;
+        }
+        // Obtener datos de los alumnos
+        const { data: alumnosData, error: errorAlumnos } = await supabase
+          .from("alumnos")
+          .select("*")
+          .in("id", alumnoIds);
+        if (!alumnosData || errorAlumnos) {
+          setAlumnos([]);
+          setLoading(false);
+          return;
+        }
+        // Calcular riesgo_nivel para cada alumno
+        const alumnosConRiesgo = alumnosData.map((alumno: any) => {
+          let riesgo_nivel: "alto" | "medio" | "bajo" = "bajo";
+          if (alumno.materias_en_recurso >= 3) riesgo_nivel = "alto";
+          else if (alumno.materias_en_recurso >= 1) riesgo_nivel = "medio";
+          return { ...alumno, riesgo_nivel };
+        });
+        setAlumnos(alumnosConRiesgo);
+      } catch (err) {
+        setAlumnos([]);
+      }
+      setLoading(false);
+    }
+    fetchAlumnos();
+  }, [grupoId]);
 
   const alumnosFiltrados = alumnos.filter(
     (alumno) =>
-      alumno.nombre_completo.toLowerCase().includes(filtro.toLowerCase()) || alumno.matricula.includes(filtro),
-  )
+      alumno.nombre_completo.toLowerCase().includes(filtro.toLowerCase()) ||
+      alumno.matricula.includes(filtro)
+  );
 
   const getRiesgoColor = (nivel: string) => {
     switch (nivel) {
       case "alto":
-        return "destructive"
+        return "destructive";
       case "medio":
-        return "secondary"
+        return "secondary";
       default:
-        return "outline"
+        return "outline";
     }
-  }
+  };
 
   const getRiesgoText = (alumno: Alumno) => {
-    const riesgos = []
-    if (alumno.materias_en_recurso >= 3) riesgos.push("Múltiples materias en recurso")
-    if (alumno.semestre_actual >= 8 && !alumno.servicio_social_realizado) riesgos.push("Servicio social pendiente")
-    if (alumno.materias_aprobadas < alumno.semestre_actual * 4) riesgos.push("Bajo rendimiento académico")
-    return riesgos.join(", ") || "Sin riesgos identificados"
-  }
+    const riesgos = [];
+    if (alumno.materias_en_recurso >= 3)
+      riesgos.push("Múltiples materias en recurso");
+    if (alumno.semestre_actual >= 8 && !alumno.servicio_social_realizado)
+      riesgos.push("Servicio social pendiente");
+    if (alumno.materias_aprobadas < alumno.semestre_actual * 4)
+      riesgos.push("Bajo rendimiento académico");
+    return riesgos.join(", ") || "Sin riesgos identificados";
+  };
 
   return (
     <Card>
@@ -102,7 +120,9 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <CardTitle>Lista de Alumnos</CardTitle>
-            <CardDescription>Gestión y seguimiento de estudiantes del grupo</CardDescription>
+            <CardDescription>
+              Gestión y seguimiento de estudiantes del grupo
+            </CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -129,11 +149,16 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
         ) : (
           <div className="space-y-4">
             {alumnosFiltrados.map((alumno) => (
-              <div key={alumno.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+              <div
+                key={alumno.id}
+                className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <Avatar className="h-12 w-12">
-                      <AvatarImage src={alumno.foto_credencial || "/placeholder.svg"} />
+                      <AvatarImage
+                        src={alumno.foto_credencial || "/placeholder.svg"}
+                      />
                       <AvatarFallback>
                         {alumno.nombre_completo
                           .split(" ")
@@ -145,11 +170,15 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
 
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-medium">{alumno.nombre_completo}</h3>
+                        <h3 className="font-medium">
+                          {alumno.nombre_completo}
+                        </h3>
                         {alumno.riesgo_nivel !== "bajo" && (
                           <AlertTriangle
                             className={`h-4 w-4 ${
-                              alumno.riesgo_nivel === "alto" ? "text-destructive" : "text-yellow-500"
+                              alumno.riesgo_nivel === "alto"
+                                ? "text-destructive"
+                                : "text-yellow-500"
                             }`}
                           />
                         )}
@@ -157,9 +186,13 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span>Matrícula: {alumno.matricula}</span>
                         <span>Semestre: {alumno.semestre_actual}°</span>
-                        <span>Materias en recurso: {alumno.materias_en_recurso}</span>
+                        <span>
+                          Materias en recurso: {alumno.materias_en_recurso}
+                        </span>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">{getRiesgoText(alumno)}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {getRiesgoText(alumno)}
+                      </p>
                     </div>
                   </div>
 
@@ -168,8 +201,8 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
                       {alumno.riesgo_nivel === "alto"
                         ? "Alto Riesgo"
                         : alumno.riesgo_nivel === "medio"
-                          ? "Riesgo Medio"
-                          : "Sin Riesgo"}
+                        ? "Riesgo Medio"
+                        : "Sin Riesgo"}
                     </Badge>
                     <Button variant="outline" size="sm">
                       <Eye className="h-4 w-4 mr-2" />
@@ -186,12 +219,14 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
 
             {alumnosFiltrados.length === 0 && (
               <div className="text-center py-8">
-                <p className="text-muted-foreground">No se encontraron alumnos</p>
+                <p className="text-muted-foreground">
+                  No se encontraron alumnos
+                </p>
               </div>
             )}
           </div>
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

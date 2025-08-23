@@ -133,6 +133,17 @@ CREATE TABLE IF NOT EXISTS notificaciones (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS reportes_parciales (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  alumno_id UUID REFERENCES alumnos(id) ON DELETE CASCADE,
+  materia VARCHAR(255) NOT NULL,
+  motivo TEXT NOT NULL,
+  profesor VARCHAR(255) NOT NULL,
+  parcial INTEGER NOT NULL CHECK (parcial >= 1 AND parcial <= 3),
+  semestre VARCHAR(20) NOT NULL,
+  fecha_reporte TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Índices para optimizar consultas
 CREATE INDEX IF NOT EXISTS idx_alumnos_matricula ON alumnos(matricula);
 CREATE INDEX IF NOT EXISTS idx_alumnos_carrera ON alumnos(carrera_id);

@@ -1,77 +1,115 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Users, User, Search } from "lucide-react"
-import { useEffect, useState } from "react"
+import { Calendar, Search, User, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { createClient } from "@/lib/auth-client";
 
 interface RegistroSesionesProps {
-  grupoId: string
+  grupoId: string;
 }
 
 interface SesionRegistrada {
-  id: string
-  fecha_sesion: string
-  tipo: "grupal" | "individual"
-  objetivos?: string
-  temas_tratados?: string
-  acuerdos_compromisos?: string
-  alumno_nombre?: string
+  id: string;
+  fecha_sesion: string;
+  tipo: "grupal" | "individual";
+  objetivos?: string;
+  temas_tratados?: string;
+  acuerdos_compromisos?: string;
+  alumno_nombre?: string;
 }
 
 export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
-  const [sesiones, setSesiones] = useState<SesionRegistrada[]>([])
-  const [filtro, setFiltro] = useState("")
-  const [tipoFiltro, setTipoFiltro] = useState<string>("todos")
-  const [loading, setLoading] = useState(true)
+  const [sesiones, setSesiones] = useState<SesionRegistrada[]>([]);
+  const [filtro, setFiltro] = useState("");
+  const [tipoFiltro, setTipoFiltro] = useState<string>("todos");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulamos la carga del historial de sesiones
-    setTimeout(() => {
-      setSesiones([
-        {
-          id: "1",
-          fecha_sesion: "2024-01-15T14:00:00Z",
-          tipo: "grupal",
-          objetivos: "Revisión de avance académico del primer parcial",
-          temas_tratados: "Análisis de calificaciones, identificación de materias con mayor dificultad",
-          acuerdos_compromisos: "Implementar sesiones de estudio grupales, mejorar asistencia",
-        },
-        {
-          id: "2",
-          fecha_sesion: "2024-01-10T15:00:00Z",
-          tipo: "individual",
-          objetivos: "Seguimiento personalizado de materias en recurso",
-          temas_tratados: "Plan de recuperación para Cálculo Diferencial y Física I",
-          acuerdos_compromisos: "Presentar avances semanales, asistir a asesorías",
-          alumno_nombre: "Carlos Mendoza Ruiz",
-        },
-        {
-          id: "3",
-          fecha_sesion: "2024-01-08T14:00:00Z",
-          tipo: "grupal",
-          objetivos: "Orientación sobre servicios institucionales",
-          temas_tratados: "Presentación de servicios de biblioteca, laboratorios y becas",
-          acuerdos_compromisos: "Registrarse en servicios de apoyo académico",
-        },
-      ])
-      setLoading(false)
-    }, 1000)
-  }, [grupoId])
+    async function fetchSesiones() {
+      setLoading(true);
+      try {
+        const supabase = createClient();
+        // Obtener sesiones del grupo
+        const { data: sesionesData, error } = await supabase
+          .from("sesiones_tutoria")
+          .select(
+            "id, fecha_sesion, tipo, objetivos, temas_tratados, acuerdos_compromisos, alumno_id"
+          )
+          .eq("grupo_id", grupoId)
+          .order("fecha_sesion", { ascending: false });
+
+        if (!sesionesData || error) {
+          setSesiones([]);
+          setLoading(false);
+          return;
+        }
+
+        // Obtener nombres de alumnos para sesiones individuales
+        const alumnoIds = sesionesData
+          .filter((s: any) => s.tipo === "individual" && s.alumno_id)
+          .map((s: any) => s.alumno_id);
+        let alumnosMap: Record<string, string> = {};
+        if (alumnoIds.length > 0) {
+          const { data: alumnos } = await supabase
+            .from("alumnos")
+            .select("id, nombre_completo")
+            .in("id", alumnoIds);
+          alumnosMap = (alumnos || []).reduce((acc: any, alumno: any) => {
+            acc[alumno.id] = alumno.nombre_completo;
+            return acc;
+          }, {});
+        }
+
+        setSesiones(
+          sesionesData.map((sesion: any) => ({
+            id: sesion.id,
+            fecha_sesion: sesion.fecha_sesion,
+            tipo: sesion.tipo,
+            objetivos: sesion.objetivos,
+            temas_tratados: sesion.temas_tratados,
+            acuerdos_compromisos: sesion.acuerdos_compromisos,
+            alumno_nombre:
+              sesion.tipo === "individual" && sesion.alumno_id
+                ? alumnosMap[sesion.alumno_id]
+                : undefined,
+          }))
+        );
+      } catch (err) {
+        setSesiones([]);
+      }
+      setLoading(false);
+    }
+    fetchSesiones();
+  }, [grupoId]);
 
   const sesionesFiltradas = sesiones.filter((sesion) => {
     const coincideFiltro =
       sesion.objetivos?.toLowerCase().includes(filtro.toLowerCase()) ||
       sesion.temas_tratados?.toLowerCase().includes(filtro.toLowerCase()) ||
-      sesion.alumno_nombre?.toLowerCase().includes(filtro.toLowerCase())
+      sesion.alumno_nombre?.toLowerCase().includes(filtro.toLowerCase());
 
-    const coincideTipo = tipoFiltro === "todos" || sesion.tipo === tipoFiltro
+    const coincideTipo = tipoFiltro === "todos" || sesion.tipo === tipoFiltro;
 
-    return coincideFiltro && coincideTipo
-  })
+    return coincideFiltro && coincideTipo;
+  });
 
   return (
     <Card>
@@ -79,7 +117,9 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <CardTitle>Registro de Sesiones</CardTitle>
-            <CardDescription>Historial de sesiones de tutoría realizadas</CardDescription>
+            <CardDescription>
+              Historial de sesiones de tutoría realizadas
+            </CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -121,7 +161,10 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
         ) : (
           <div className="space-y-6">
             {sesionesFiltradas.map((sesion) => (
-              <div key={sesion.id} className="border rounded-lg p-6 hover:bg-muted/50 transition-colors">
+              <div
+                key={sesion.id}
+                className="border rounded-lg p-6 hover:bg-muted/50 transition-colors"
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 bg-primary/10 rounded-lg flex items-center justify-center">
@@ -134,18 +177,29 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-medium">
-                          {sesion.tipo === "grupal" ? "Sesión Grupal" : "Sesión Individual"}
+                          {sesion.tipo === "grupal"
+                            ? "Sesión Grupal"
+                            : "Sesión Individual"}
                         </h3>
-                        <Badge variant={sesion.tipo === "grupal" ? "secondary" : "outline"}>{sesion.tipo}</Badge>
+                        <Badge
+                          variant={
+                            sesion.tipo === "grupal" ? "secondary" : "outline"
+                          }
+                        >
+                          {sesion.tipo}
+                        </Badge>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-4 w-4" />
-                        {new Date(sesion.fecha_sesion).toLocaleDateString("es-MX", {
-                          weekday: "long",
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
+                        {new Date(sesion.fecha_sesion).toLocaleDateString(
+                          "es-MX",
+                          {
+                            weekday: "long",
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          }
+                        )}
                       </div>
                     </div>
                   </div>
@@ -165,21 +219,27 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
                 <div className="space-y-4">
                   {sesion.objetivos && (
                     <div>
-                      <h4 className="font-medium text-sm text-muted-foreground mb-2">Objetivos</h4>
+                      <h4 className="font-medium text-sm text-muted-foreground mb-2">
+                        Objetivos
+                      </h4>
                       <p className="text-sm">{sesion.objetivos}</p>
                     </div>
                   )}
 
                   {sesion.temas_tratados && (
                     <div>
-                      <h4 className="font-medium text-sm text-muted-foreground mb-2">Temas Tratados</h4>
+                      <h4 className="font-medium text-sm text-muted-foreground mb-2">
+                        Temas Tratados
+                      </h4>
                       <p className="text-sm">{sesion.temas_tratados}</p>
                     </div>
                   )}
 
                   {sesion.acuerdos_compromisos && (
                     <div>
-                      <h4 className="font-medium text-sm text-muted-foreground mb-2">Acuerdos y Compromisos</h4>
+                      <h4 className="font-medium text-sm text-muted-foreground mb-2">
+                        Acuerdos y Compromisos
+                      </h4>
                       <p className="text-sm">{sesion.acuerdos_compromisos}</p>
                     </div>
                   )}
@@ -190,5 +250,5 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

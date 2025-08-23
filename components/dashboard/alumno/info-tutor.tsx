@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { createClient } from "@/lib/auth-client";
 
 interface InfoTutorProps {
   alumnoId: string;
@@ -29,16 +30,68 @@ export function InfoTutor({ alumnoId }: InfoTutorProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulamos la carga de información del tutor
-    // En una implementación real, esto vendría de la API
-    setTimeout(() => {
+    async function fetchTutor() {
+      setLoading(true);
+      const supabase = createClient();
+
+      // 1. Buscar el grupo activo del alumno
+      const { data: alumnoGrupo, error: errorAlumnoGrupo } = await supabase
+        .from("alumno_grupo")
+        .select("grupo_id")
+        .eq("alumno_id", alumnoId)
+        .eq("activo", true)
+        .single();
+
+      if (errorAlumnoGrupo || !alumnoGrupo) {
+        setTutor(null);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Buscar el profesor activo asignado al grupo
+      const { data: profesorGrupo, error: errorProfesorGrupo } = await supabase
+        .from("profesor_grupo")
+        .select("profesor_id, grupo_id")
+        .eq("grupo_id", alumnoGrupo.grupo_id)
+        .eq("activo", true)
+        .single();
+
+      if (errorProfesorGrupo || !profesorGrupo) {
+        setTutor(null);
+        setLoading(false);
+        return;
+      }
+
+      // 3. Obtener datos del profesor
+      const { data: profesor, error: errorProfesor } = await supabase
+        .from("profesores")
+        .select("nombre_completo, correo_institucional, foto_perfil")
+        .eq("id", profesorGrupo.profesor_id)
+        .single();
+
+      // 4. Obtener horario de tutoría del grupo
+      const { data: grupo, error: errorGrupo } = await supabase
+        .from("grupos")
+        .select("horario_tutoria")
+        .eq("id", profesorGrupo.grupo_id)
+        .single();
+
+      if (errorProfesor || !profesor) {
+        setTutor(null);
+        setLoading(false);
+        return;
+      }
+
       setTutor({
-        nombre_completo: "Dr. Juan Carlos Pérez",
-        correo_institucional: "jperez@ITSOEH.edu.mx",
-        horario_tutoria: "Lunes 14:00-15:00",
+        nombre_completo: profesor.nombre_completo,
+        correo_institucional: profesor.correo_institucional,
+        foto_perfil: profesor.foto_perfil,
+        horario_tutoria: grupo?.horario_tutoria || undefined,
       });
       setLoading(false);
-    }, 1000);
+    }
+
+    fetchTutor();
   }, [alumnoId]);
 
   if (loading) {
