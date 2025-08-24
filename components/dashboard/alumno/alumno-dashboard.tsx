@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation"; // <-- Agrega esto
 import { useEffect, useState } from "react";
 
 import { DashboardLayout } from "@/components/dashboard/layout/dashboard-layout";
@@ -19,11 +20,21 @@ import { ReporteParcial } from "./reporte-parcial";
 
 export function AlumnoDashboard() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<"principal" | "reportes">("principal");
+  const router = useRouter(); // <-- Nuevo
+  const searchParams = useSearchParams(); // <-- Nuevo
+
+  // Lee el tab actual de la query string, por ejemplo ?tab=reportes
+  const tabActual =
+    (searchParams.get("tab") as "principal" | "reportes") || "principal";
   const [materiasRegistradas, setMateriasRegistradas] = useState<
     boolean | null
   >(null);
   const [verificando, setVerificando] = useState(true);
+
+  // Elimina el estado local de tab y usa la query string
+  const handleTabChange = (tab: "principal" | "reportes") => {
+    router.replace(`?tab=${tab}`);
+  };
 
   useEffect(() => {
     async function verificarMaterias() {
@@ -158,27 +169,27 @@ export function AlumnoDashboard() {
         <div className="flex gap-2 mb-4">
           <button
             className={`px-4 py-2 rounded font-semibold transition ${
-              tab === "principal"
+              tabActual === "principal"
                 ? "bg-blue-600 text-white"
                 : "bg-gray-100 text-gray-700 hover:bg-blue-100"
             }`}
-            onClick={() => setTab("principal")}
+            onClick={() => handleTabChange("principal")}
           >
             Principal
           </button>
           <button
             className={`px-4 py-2 rounded font-semibold transition ${
-              tab === "reportes"
+              tabActual === "reportes"
                 ? "bg-blue-600 text-white"
                 : "bg-gray-100 text-gray-700 hover:bg-blue-100"
             }`}
-            onClick={() => setTab("reportes")}
+            onClick={() => handleTabChange("reportes")}
           >
             Reportes por Parcial
           </button>
         </div>
         {/* Contenido según tab */}
-        {tab === "principal" ? (
+        {tabActual === "principal" ? (
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Columna Principal */}
             <div className="lg:col-span-2 space-y-6">

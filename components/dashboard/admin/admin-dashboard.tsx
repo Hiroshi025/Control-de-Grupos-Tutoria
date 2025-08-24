@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
+
 import { DashboardLayout } from "@/components/dashboard/layout/dashboard-layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
@@ -14,6 +16,15 @@ import { GestionUsuarios } from "./gestion-usuarios";
 
 export function AdminDashboard() {
   const { user } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Leer el tab actual de la query string, por ejemplo ?tab=usuarios
+  const tabActual = searchParams.get("tab") || "estadisticas";
+
+  const handleTabChange = (tab: string) => {
+    router.replace(`?tab=${tab}`);
+  };
 
   if (!user || user.userType !== "administrador") {
     return null;
@@ -33,14 +44,17 @@ export function AdminDashboard() {
         </div>
 
         {/* Tabs de Navegación */}
-        <Tabs defaultValue="estadisticas" className="space-y-6">
+        <Tabs
+          value={tabActual}
+          onValueChange={handleTabChange}
+          className="space-y-6"
+        >
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="estadisticas">Estadísticas</TabsTrigger>
             <TabsTrigger value="usuarios">Usuarios</TabsTrigger>
-            <TabsTrigger value="grupos">Grupos</TabsTrigger> {/* NUEVO */}
+            <TabsTrigger value="grupos">Grupos</TabsTrigger>
             <TabsTrigger value="tutores">Tutores</TabsTrigger>
-            <TabsTrigger value="alumnos-grupo">Alumnos/Grupo</TabsTrigger>{" "}
-            {/* NUEVO */}
+            <TabsTrigger value="alumnos-grupo">Alumnos/Grupo</TabsTrigger>
             <TabsTrigger value="carga">Carga Masiva</TabsTrigger>
             <TabsTrigger value="plan">Plan de Estudios</TabsTrigger>
           </TabsList>

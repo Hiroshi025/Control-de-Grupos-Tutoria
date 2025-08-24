@@ -1,6 +1,6 @@
 # Sistema de Control de Estudiantes Tutorados - ITSOEH
 
-Sistema web completo para la gestión de tutorías académicas del Instituto Tecnológico Superior del Occidente del Estado de Hidalgo.
+Sistema web integral para la gestión de tutorías académicas, seguimiento proactivo y automatización de reportes por parcial en el Instituto Tecnológico Superior del Occidente del Estado de Hidalgo.
 
 ## 🎯 Características Principales
 
@@ -10,16 +10,19 @@ Sistema web completo para la gestión de tutorías académicas del Instituto Tec
 - **Indicadores Críticos**: Estado de Servicio Social y Residencia Profesional
 - **Progreso de Carrera**: Barra de avance en el plan de estudios
 - **Acciones Rápidas**: Descarga de kardex, agendar citas, historial de tutorías
-- **Reporte Académico Proactivo**: Sistema para reportar materias reprobadas por parcial
+- **Reporte Académico Proactivo**: Formulario y carga de Excel para reportar materias reprobadas por parcial (3 reportes por semestre)
+- **Actualización Automática de Estado**: Al finalizar el tercer reporte, el sistema ajusta materias aprobadas, en recurso, en especial y sin cursar
+- **Reglas Especiales**: Materias reprobadas dos veces se marcan como "especial" y se notifica al tutor
 - **Información del Tutor**: Datos de contacto y horarios de atención
 
 ### 👨‍🏫 Dashboard de Profesores
 
 - **Gestión de Grupos**: Lista de grupos tutorados por semestre
-- **Lista de Alumnos**: Tabla con indicadores de riesgo académico
+- **Lista de Alumnos**: Tabla con indicadores de riesgo académico y materias en especial
 - **Calendario de Sesiones**: Visualización de citas agendadas
 - **Registro de Sesiones**: Historial completo de tutorías grupales e individuales
 - **Herramientas de Seguimiento**: Formularios para objetivos, temas y compromisos
+- **Notificaciones Automáticas**: Alertas sobre alumnos en riesgo y materias especiales
 
 ### 👨‍💼 Dashboard de Administradores
 
@@ -28,6 +31,7 @@ Sistema web completo para la gestión de tutorías académicas del Instituto Tec
 - **Asignación de Tutores**: Vinculación de profesores con grupos
 - **Carga Masiva**: Importación desde Excel/CSV con validación
 - **Gestión de Plan de Estudios**: Administración de materias por carrera
+- **Automatización de Semestre**: Reseteo automático de materias cursando al finalizar el semestre
 
 ### 📱 Sistema de Comunicación
 
@@ -42,6 +46,7 @@ Sistema web completo para la gestión de tutorías académicas del Instituto Tec
 - **UI/UX**: Tailwind CSS v4, shadcn/ui, Lucide Icons
 - **Base de Datos**: Supabase (PostgreSQL)
 - **Autenticación**: Supabase Auth con Row Level Security
+- **Automatización**: Supabase Scheduled Functions para tareas programadas (ej. reseteo de materias cursando)
 - **Gráficos**: Recharts para visualizaciones interactivas
 - **Formularios**: React Hook Form con validación
 - **Fechas**: date-fns para manejo de fechas en español
@@ -63,19 +68,21 @@ Sistema web completo para la gestión de tutorías académicas del Instituto Tec
      - `scripts/01-create-database-schema.sql`
      - `scripts/02-seed-initial-data.sql`
      - `scripts/03-create-communication-tables.sql`
+     - `scripts/05-update-electromecanica-plan.sql` (actualización de materias y carrera)
 
 2. **Variables de Entorno**
-   \`\`\`env
+
+   ```env
    NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
    NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL=http://localhost:3000
-   \`\`\`
+   ```
 
 3. **Instalación de Dependencias**
-   \`\`\`bash
+   ```bash
    npm install
    npm run dev
-   \`\`\`
+   ```
 
 ## 📊 Estructura de la Base de Datos
 
@@ -88,15 +95,18 @@ Sistema web completo para la gestión de tutorías académicas del Instituto Tec
 - **grupos**: Grupos de tutoría por semestre
 - **materias**: Plan de estudios y materias por carrera
 - **sesiones_tutoria**: Registro de sesiones grupales e individuales
+- **reportes_parciales**: Reporte académico por parcial (materias reprobadas, motivo, profesor, parcial)
 - **notificaciones**: Sistema de alertas y comunicación
 - **mensajes**: Mensajería interna entre usuarios
+- **materias_alumno**: Relación alumno-materia por semestre
 
-### Funcionalidades de Seguridad
+### Automatización y Seguridad
 
 - **Row Level Security (RLS)**: Protección de datos por usuario
 - **Políticas de Acceso**: Restricciones basadas en tipo de usuario
 - **Autenticación Segura**: Tokens JWT y refresh tokens
 - **Validación de Datos**: Constraints y triggers en base de datos
+- **Scheduled Functions**: Automatización de reseteo de materias cursando y actualización de estado académico
 
 ## 🎨 Diseño y UX
 
@@ -125,7 +135,8 @@ Sistema web completo para la gestión de tutorías académicas del Instituto Tec
 ### Alumnos
 
 - ✅ Visualización de estado académico completo
-- ✅ Reporte proactivo de materias reprobadas
+- ✅ Reporte proactivo de materias reprobadas por parcial (3 reportes por semestre)
+- ✅ Actualización automática de avance académico al finalizar el tercer reporte
 - ✅ Seguimiento de servicio social y residencia
 - ✅ Historial de sesiones de tutoría
 - ✅ Comunicación directa con tutor asignado
@@ -134,11 +145,12 @@ Sistema web completo para la gestión de tutorías académicas del Instituto Tec
 ### Profesores
 
 - ✅ Gestión completa de grupos tutorados
-- ✅ Identificación de alumnos en riesgo
+- ✅ Identificación de alumnos en riesgo y materias en especial
 - ✅ Registro detallado de sesiones de tutoría
 - ✅ Calendario de citas y seguimiento
 - ✅ Herramientas de comunicación con alumnos
 - ✅ Reportes grupales e individuales
+- ✅ Notificaciones automáticas sobre alumnos en especial
 
 ### Administradores
 
@@ -148,6 +160,7 @@ Sistema web completo para la gestión de tutorías académicas del Instituto Tec
 - ✅ Importación masiva de datos
 - ✅ Configuración del plan de estudios
 - ✅ Supervisión general del sistema
+- ✅ Automatización de cierre de semestre y reseteo de materias cursando
 
 ## 🔔 Sistema de Notificaciones
 
@@ -211,19 +224,41 @@ Para soporte técnico o consultas sobre el sistema, contactar al administrador d
 ### Reporte Proactivo de Materias Reprobadas
 
 - **Cada alumno debe realizar 3 reportes por semestre**, uno por cada parcial (Parcial 1, 2 y 3).
-- El reporte puede realizarse mediante un formulario web o cargando un archivo Excel desde el dashboard del alumno.
+- El reporte se realiza mediante formulario web o carga de archivo Excel desde el dashboard del alumno.
 - Cada reporte incluye: materia reprobada, motivo, profesor y parcial correspondiente.
 
 ### Procesamiento y Actualización de Estado Académico
 
 - **Al finalizar el tercer reporte (Parcial 3):**
-  - Las materias aprobadas y reprobadas se descuentan de la carga académica total de la carrera.
-  - El sistema actualiza automáticamente los datos del alumno:
+  - El sistema descuenta materias aprobadas y reprobadas de la carga académica total.
+  - Actualiza automáticamente los datos del alumno:
     - Materias aprobadas
     - Materias en recurso
     - Materias en especial
     - Materias sin cursar
 - **Regla especial:** Si una materia es reportada como reprobada por segunda vez (en dos semestres distintos), se marca como "especial" para el semestre siguiente y se notifica al tutor.
+
+### Automatización con Supabase Scheduled Functions
+
+- **Reseteo automático de materias cursando** al finalizar el semestre usando una función SQL y tarea programada en Supabase Studio.
+- Ejemplo de función:
+  ```sql
+  CREATE OR REPLACE FUNCTION reset_materias_actualmente_cursando()
+  RETURNS void AS $$
+  BEGIN
+    UPDATE alumnos
+    SET materias_actualmente_cursando = 0
+    WHERE id IN (
+      SELECT ag.alumno_id
+      FROM alumno_grupo ag
+      JOIN grupos g ON ag.grupo_id = g.id
+      WHERE g.fin_de_semestre <= CURRENT_DATE
+        AND ag.activo = true
+    );
+  END;
+  $$ LANGUAGE plpgsql;
+  ```
+- Programar la función desde Supabase Studio para ejecutarse al final de cada semestre.
 
 ### Flujo de Reporte
 
@@ -240,44 +275,9 @@ Para soporte técnico o consultas sobre el sistema, contactar al administrador d
 - Al finalizar el semestre, el sistema ajusta la carga académica y el historial del alumno.
 - Si una materia es reprobada dos veces, se considera especial y requiere atención adicional en el siguiente semestre.
 
-En Supabase/PostgreSQL, puedes automatizar el reseteo de `materias_actualmente_cursando` usando una **función y un job programado** (pg_cron o Supabase Scheduled Functions).
-
-### Opción 1: Usar Supabase Scheduled Functions (recomendado en Supabase)
-
-1. **Crea una función SQL para resetear el campo:**
-````sql
-CREATE OR REPLACE FUNCTION reset_materias_actualmente_cursando()
-RETURNS void AS $$
-BEGIN
-  UPDATE alumnos
-  SET materias_actualmente_cursando = 0
-  WHERE id IN (
-    SELECT ag.alumno_id
-    FROM alumno_grupo ag
-    JOIN grupos g ON ag.grupo_id = g.id
-    WHERE g.fin_de_semestre <= CURRENT_DATE
-      AND ag.activo = true
-  );
-END;
-$$ LANGUAGE plpgsql;
-````
-
-2. **Programa la función desde Supabase Studio:**
-   - Ve a "Scheduled Functions" y crea una tarea que ejecute `SELECT reset_materias_actualmente_cursando();` cada día o al final de cada semestre.
-
----
-
-### Opción 2: Usar pg_cron (si tienes acceso al servidor)
-
-1. Instala la extensión `pg_cron` en tu base de datos.
-2. Programa el job:
-````sql
-SELECT cron.schedule('reset-materias', '0 0 * * *', $$SELECT reset_materias_actualmente_cursando();$$);
-````
-
 ---
 
 **Resumen:**  
-La tarea programada ejecuta la función cada día (o cuando lo definas), y resetea el campo para los alumnos cuyo grupo terminó el semestre. Así no necesitas hacerlo manualmente.
+El sistema automatiza el seguimiento académico, el reporte por parcial y el avance de los alumnos, notificando a tutores y administradores en tiempo real y facilitando la gestión de tutorías.
 
 ¿Quieres el ejemplo para Supabase Edge Functions (TypeScript) también?

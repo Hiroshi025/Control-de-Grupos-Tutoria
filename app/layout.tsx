@@ -5,7 +5,10 @@ import "@/styles/globals.css";
 
 import { Inter, Manrope } from "next/font/google";
 
+import { ThemeToggle } from "@/components/theme-toggle";
 import { AuthProvider } from "@/hooks/use-auth";
+
+import { BodyClient } from "./body-client";
 
 const geist = Inter({
   subsets: ["latin"],
@@ -40,7 +43,12 @@ export default function RootLayout({
         <link rel="icon" href="/logo.png" type="image/png" />
       </head>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <div className="fixed top-4 right-4 z-50">
+            <ThemeToggle />
+          </div>
+          <BodyClient>{children}</BodyClient>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, Search, User, Users } from "lucide-react";
+import { Calendar, FileText, Search, User, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -31,22 +31,36 @@ interface SesionRegistrada {
   materias_a_recurso_final?: string[];
 }
 
+interface ReporteParcial {
+  id: string;
+  alumno_id: string;
+  materia: string;
+  motivo: string;
+  profesor: string;
+  parcial: number;
+  semestre: string;
+  fecha_reporte: string;
+  alumno_nombre?: string;
+}
+
 export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
   const [sesiones, setSesiones] = useState<SesionRegistrada[]>([]);
+  const [reportes, setReportes] = useState<ReporteParcial[]>([]);
   const [filtro, setFiltro] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState<string>("todos");
   const [loading, setLoading] = useState(true);
+  const [loadingReportes, setLoadingReportes] = useState(true);
   const [showReporte, setShowReporte] = useState(false);
   const [sesionReporte, setSesionReporte] = useState<SesionRegistrada | null>(
     null
   );
 
+  // Obtener sesiones de tutoría
   useEffect(() => {
     async function fetchSesiones() {
       setLoading(true);
       try {
         const supabase = createClient();
-        // Obtener sesiones del grupo
         const { data: sesionesData, error } = await supabase
           .from("sesiones_tutoria")
           .select(
@@ -113,6 +127,60 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
     fetchSesiones();
   }, [grupoId]);
 
+  // Obtener reportes académicos enviados por los alumnos del grupo
+  useEffect(() => {
+    async function fetchReportes() {
+      setLoadingReportes(true);
+      try {
+        const supabase = createClient();
+        // Obtener alumnos activos del grupo
+        const { data: alumnosGrupo } = await supabase
+          .from("alumno_grupo")
+          .select("alumno_id")
+          .eq("grupo_id", grupoId)
+          .eq("activo", true);
+
+        const alumnoIds = alumnosGrupo
+          ? alumnosGrupo.map((ag: any) => ag.alumno_id)
+          : [];
+        if (alumnoIds.length === 0) {
+          setReportes([]);
+          setLoadingReportes(false);
+          return;
+        }
+
+        // Obtener reportes parciales de esos alumnos
+        const { data: reportesData } = await supabase
+          .from("reportes_parciales")
+          .select("*")
+          .in("alumno_id", alumnoIds)
+          .order("fecha_reporte", { ascending: false });
+
+        // Obtener nombres de alumnos
+        let alumnosMap: Record<string, string> = {};
+        const { data: alumnos } = await supabase
+          .from("alumnos")
+          .select("id, nombre_completo")
+          .in("id", alumnoIds);
+        alumnosMap = (alumnos || []).reduce((acc: any, alumno: any) => {
+          acc[alumno.id] = alumno.nombre_completo;
+          return acc;
+        }, {});
+
+        setReportes(
+          (reportesData || []).map((r: any) => ({
+            ...r,
+            alumno_nombre: alumnosMap[r.alumno_id] || "",
+          }))
+        );
+      } catch (err) {
+        setReportes([]);
+      }
+      setLoadingReportes(false);
+    }
+    fetchReportes();
+  }, [grupoId]);
+
   const sesionesFiltradas = sesiones.filter((sesion) => {
     const coincideFiltro =
       (sesion.objetivos?.toLowerCase().includes(filtro.toLowerCase()) ??
@@ -127,7 +195,7 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
     return coincideFiltro && coincideTipo;
   });
 
-  // Handler para mostrar el reporte
+  // Handler para mostrar el reporte de sesión
   const handleGenerarReporte = (sesion: SesionRegistrada) => {
     setSesionReporte(sesion);
     setShowReporte(true);
@@ -304,6 +372,65 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
             ))}
           </div>
         )}
+
+        {/* Sección de reportes académicos enviados por los alumnos */}
+        <div className="mt-10">
+          <h3 className="font-bold text-lg flex items-center gap-2 mb-4">
+            <FileText className="h-5 w-5 text-blue-600" />
+            Reportes Académicos Enviados por Alumnos
+          </h3>
+          {loadingReportes ? (
+            <div className="animate-pulse h-16 bg-muted rounded-lg"></div>
+          ) : reportes.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No hay reportes académicos enviados por los alumnos de este grupo.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm border rounded-lg shadow">
+                <thead>
+                  <tr className="bg-blue-50">
+                    <th className="px-2 py-2 text-left">Alumno</th>
+                    <th className="px-2 py-2 text-left">Materia</th>
+                    <th className="px-2 py-2 text-left">Profesor</th>
+                    <th className="px-2 py-2 text-left">Motivo</th>
+                    <th className="px-2 py-2 text-center">Parcial</th>
+                    <th className="px-2 py-2 text-center">Fecha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportes.map((r) => (
+                    <tr
+                      key={r.id}
+                      className="border-b hover:bg-blue-50/50 transition-all"
+                    >
+                      <td className="px-2 py-2 font-medium">
+                        {r.alumno_nombre}
+                      </td>
+                      <td className="px-2 py-2">{r.materia}</td>
+                      <td className="px-2 py-2">{r.profesor}</td>
+                      <td className="px-2 py-2">{r.motivo}</td>
+                      <td className="px-2 py-2 text-center">
+                        <span className="inline-block bg-blue-200 text-blue-800 rounded px-2 py-1 text-xs">
+                          {r.parcial}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        {new Date(r.fecha_reporte).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
+                <span className="font-semibold">Total reportes:</span>
+                <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold">
+                  {reportes.length}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       </CardContent>
       {/* Modal para reporte detallado */}
       <Dialog open={showReporte} onOpenChange={setShowReporte}>

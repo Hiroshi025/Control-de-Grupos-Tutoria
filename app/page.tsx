@@ -3,13 +3,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function HomePage() {
   return (
@@ -376,14 +370,14 @@ export default function HomePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>Carrera: Ingeniería Electromecánica</li>
                 <li>Desarrollado por: Hiroshi025</li>
-                <li>Año: 2024</li>
+                <li>Año: 2025</li>
               </ul>
             </div>
           </div>
 
           <div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
             <p>
-              © 2024 Instituto Tecnológico Superior del Occidente del Estado de
+              © 2025 Instituto Tecnológico Superior del Occidente del Estado de
               Hidalgo. Todos los derechos reservados.
             </p>
           </div>

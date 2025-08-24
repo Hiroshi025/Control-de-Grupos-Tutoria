@@ -9,7 +9,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+	Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/lib/auth-client";
 
@@ -41,6 +45,14 @@ export function GestionUsuarios() {
     "alumno"
   );
   const [archivoCarga, setArchivoCarga] = useState<File | null>(null);
+
+  // Estados para ver/editar/eliminar
+  const [usuarioSeleccionado, setUsuarioSeleccionado] =
+    useState<Usuario | null>(null);
+  const [modoDialogo, setModoDialogo] = useState<"ver" | "editar" | null>(null);
+  const [formData, setFormData] = useState<Partial<Usuario>>({});
+  const [errorForm, setErrorForm] = useState<string | null>(null);
+  const [confirmarEliminar, setConfirmarEliminar] = useState(false);
 
   // Cargar datos reales
   useEffect(() => {
@@ -440,6 +452,502 @@ export function GestionUsuarios() {
     return null;
   }
 
+  // Abrir modal de ver/editar
+  const handleVerUsuario = (usuario: Usuario, tipo: "alumno" | "profesor") => {
+    setUsuarioSeleccionado(usuario);
+    setModoDialogo("ver");
+    setFormData(usuario);
+    setErrorForm(null);
+  };
+  const handleEditarUsuarioModal = (
+    usuario: Usuario,
+    tipo: "alumno" | "profesor"
+  ) => {
+    setUsuarioSeleccionado(usuario);
+    setModoDialogo("editar");
+    setFormData(usuario);
+    setErrorForm(null);
+  };
+
+  // Guardar cambios de edición
+  const handleGuardarEdicion = async () => {
+    setErrorForm(null);
+    // Validar datos
+    let error;
+    if (tipoUsuario === "alumno") {
+      error = validarAlumno(formData);
+    } else {
+      error = validarProfesor(formData);
+    }
+    if (error) {
+      setErrorForm(error);
+      return;
+    }
+    try {
+      await handleEditarUsuario(usuarioSeleccionado!.id, formData, tipoUsuario);
+      setModoDialogo(null);
+      setUsuarioSeleccionado(null);
+    } catch (e: any) {
+      setErrorForm("Error al guardar: " + (e.message || "Error desconocido"));
+    }
+  };
+
+  // Eliminar usuario con confirmación
+  const handleEliminarUsuarioConfirm = async () => {
+    try {
+      await handleEliminarUsuario(usuarioSeleccionado!.id, tipoUsuario);
+      setConfirmarEliminar(false);
+      setModoDialogo(null);
+      setUsuarioSeleccionado(null);
+    } catch (e: any) {
+      setErrorForm("Error al eliminar: " + (e.message || "Error desconocido"));
+    }
+  };
+
+  // Indicador visual de tipo de usuario
+  function TipoUsuarioBadge({ tipo }: { tipo: "alumno" | "profesor" }) {
+    return (
+      <span
+        className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+          tipo === "alumno"
+            ? "bg-blue-100 text-blue-700"
+            : "bg-green-100 text-green-700"
+        }`}
+      >
+        {tipo === "alumno" ? "Alumno" : "Profesor"}
+      </span>
+    );
+  }
+
+  /**
+   * Formulario para ver el perfil de un alumno.
+   * Muestra los datos principales del alumno en modo solo lectura.
+   * Tipo de usuario: alumno.
+   */
+  function VerPerfilAlumno({
+    usuario,
+    onClose,
+  }: {
+    usuario: Usuario;
+    onClose: () => void;
+  }) {
+    return (
+      <form className="space-y-4">
+        <div className="flex gap-4 items-center">
+          <Avatar className="h-16 w-16 border-2 border-blue-300">
+            <AvatarImage src={usuario.foto_perfil || "/placeholder.svg"} />
+            <AvatarFallback>
+              {usuario.nombre_completo
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h2 className="font-bold text-lg">{usuario.nombre_completo}</h2>
+            <TipoUsuarioBadge tipo="alumno" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Matrícula</Label>
+            <Input value={usuario.matricula || ""} disabled />
+          </div>
+          <div>
+            <Label>Correo institucional</Label>
+            <Input value={usuario.correo_institucional || ""} disabled />
+          </div>
+          <div>
+            <Label>Edad</Label>
+            <Input value={usuario.edad || ""} disabled />
+          </div>
+          <div>
+            <Label>Semestre actual</Label>
+            <Input value={usuario.semestre_actual || ""} disabled />
+          </div>
+          <div>
+            <Label>Materias aprobadas</Label>
+            <Input value={usuario.materias_aprobadas || 0} disabled />
+          </div>
+          <div>
+            <Label>Materias en recurso</Label>
+            <Input value={usuario.materias_en_recurso || 0} disabled />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </form>
+    );
+  }
+
+  /**
+   * Formulario para ver el perfil de un profesor.
+   * Muestra los datos principales del profesor en modo solo lectura.
+   * Tipo de usuario: profesor.
+   */
+  function VerPerfilProfesor({
+    usuario,
+    onClose,
+  }: {
+    usuario: Usuario;
+    onClose: () => void;
+  }) {
+    return (
+      <form className="space-y-4">
+        <div className="flex gap-4 items-center">
+          <Avatar className="h-16 w-16 border-2 border-green-300">
+            <AvatarImage src={usuario.foto_perfil || "/placeholder.svg"} />
+            <AvatarFallback>
+              {usuario.nombre_completo
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h2 className="font-bold text-lg">{usuario.nombre_completo}</h2>
+            <TipoUsuarioBadge tipo="profesor" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Correo institucional</Label>
+            <Input value={usuario.correo_institucional || ""} disabled />
+          </div>
+          <div>
+            <Label>Edad</Label>
+            <Input value={usuario.edad || ""} disabled />
+          </div>
+          <div>
+            <Label>Grupos actuales</Label>
+            <Input value={usuario.grupos_actuales || 0} disabled />
+          </div>
+          <div>
+            <Label>Foto de perfil</Label>
+            <Input value={usuario.foto_perfil || ""} disabled />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </form>
+    );
+  }
+
+  /**
+   * Formulario para editar los datos de un alumno.
+   * Permite modificar los campos relevantes del alumno.
+   * Tipo de usuario: alumno.
+   */
+  function EditarAlumnoForm({
+    usuario,
+    formData,
+    setFormData,
+    errorForm,
+    onSubmit,
+    onClose,
+  }: {
+    usuario: Usuario;
+    formData: Partial<Usuario>;
+    setFormData: React.Dispatch<React.SetStateAction<Partial<Usuario>>>;
+    errorForm: string | null;
+    onSubmit: () => void;
+    onClose: () => void;
+  }) {
+    return (
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
+        <div className="flex gap-4 items-center">
+          <Avatar className="h-16 w-16 border-2 border-blue-300">
+            <AvatarImage src={usuario.foto_perfil || "/placeholder.svg"} />
+            <AvatarFallback>
+              {usuario.nombre_completo
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h2 className="font-bold text-lg">Editar alumno</h2>
+            <TipoUsuarioBadge tipo="alumno" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Nombre completo</Label>
+            <Input
+              value={formData.nombre_completo || ""}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, nombre_completo: e.target.value }))
+              }
+              required
+            />
+          </div>
+          <div>
+            <Label>Matrícula</Label>
+            <Input
+              value={formData.matricula || ""}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, matricula: e.target.value }))
+              }
+              required
+            />
+          </div>
+          <div>
+            <Label>Correo institucional</Label>
+            <Input
+              value={formData.correo_institucional || ""}
+              onChange={(e) =>
+                setFormData((f) => ({
+                  ...f,
+                  correo_institucional: e.target.value,
+                }))
+              }
+              required
+            />
+          </div>
+          <div>
+            <Label>Edad</Label>
+            <Input
+              type="number"
+              value={formData.edad || ""}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, edad: Number(e.target.value) }))
+              }
+              required
+              min={15}
+              max={100}
+            />
+          </div>
+          <div>
+            <Label>Semestre actual</Label>
+            <Input
+              type="number"
+              value={formData.semestre_actual || ""}
+              onChange={(e) =>
+                setFormData((f) => ({
+                  ...f,
+                  semestre_actual: Number(e.target.value),
+                }))
+              }
+              required
+              min={1}
+              max={12}
+            />
+          </div>
+          <div>
+            <Label>Materias aprobadas</Label>
+            <Input
+              type="number"
+              value={formData.materias_aprobadas || 0}
+              onChange={(e) =>
+                setFormData((f) => ({
+                  ...f,
+                  materias_aprobadas: Number(e.target.value),
+                }))
+              }
+              min={0}
+            />
+          </div>
+          <div>
+            <Label>Materias en recurso</Label>
+            <Input
+              type="number"
+              value={formData.materias_en_recurso || 0}
+              onChange={(e) =>
+                setFormData((f) => ({
+                  ...f,
+                  materias_en_recurso: Number(e.target.value),
+                }))
+              }
+              min={0}
+            />
+          </div>
+        </div>
+        {errorForm && <p className="text-destructive text-sm">{errorForm}</p>}
+        <DialogFooter>
+          <Button type="submit">Guardar cambios</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+        </DialogFooter>
+      </form>
+    );
+  }
+
+  /**
+   * Formulario para editar los datos de un profesor.
+   * Permite modificar los campos relevantes del profesor.
+   * Tipo de usuario: profesor.
+   */
+  function EditarProfesorForm({
+    usuario,
+    formData,
+    setFormData,
+    errorForm,
+    onSubmit,
+    onClose,
+  }: {
+    usuario: Usuario;
+    formData: Partial<Usuario>;
+    setFormData: React.Dispatch<React.SetStateAction<Partial<Usuario>>>;
+    errorForm: string | null;
+    onSubmit: () => void;
+    onClose: () => void;
+  }) {
+    return (
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
+        <div className="flex gap-4 items-center">
+          <Avatar className="h-16 w-16 border-2 border-green-300">
+            <AvatarImage src={usuario.foto_perfil || "/placeholder.svg"} />
+            <AvatarFallback>
+              {usuario.nombre_completo
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h2 className="font-bold text-lg">Editar profesor</h2>
+            <TipoUsuarioBadge tipo="profesor" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>Nombre completo</Label>
+            <Input
+              value={formData.nombre_completo || ""}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, nombre_completo: e.target.value }))
+              }
+              required
+            />
+          </div>
+          <div>
+            <Label>Correo institucional</Label>
+            <Input
+              value={formData.correo_institucional || ""}
+              onChange={(e) =>
+                setFormData((f) => ({
+                  ...f,
+                  correo_institucional: e.target.value,
+                }))
+              }
+              required
+            />
+          </div>
+          <div>
+            <Label>Edad</Label>
+            <Input
+              type="number"
+              value={formData.edad || ""}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, edad: Number(e.target.value) }))
+              }
+              required
+              min={18}
+              max={100}
+            />
+          </div>
+          <div>
+            <Label>Foto de perfil</Label>
+            <Input
+              value={formData.foto_perfil || ""}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, foto_perfil: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <Label>Grupos actuales</Label>
+            <Input value={formData.grupos_actuales || 0} disabled />
+          </div>
+        </div>
+        {errorForm && <p className="text-destructive text-sm">{errorForm}</p>}
+        <DialogFooter>
+          <Button type="submit">Guardar cambios</Button>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+        </DialogFooter>
+      </form>
+    );
+  }
+
+  /**
+   * Formulario para confirmar la eliminación de un usuario (alumno o profesor).
+   * Muestra advertencia y solicita confirmación antes de eliminar.
+   * Tipo de usuario: alumno o profesor.
+   */
+  function EliminarUsuarioForm({
+    usuario,
+    tipoUsuario,
+    onConfirm,
+    onCancel,
+  }: {
+    usuario: Usuario;
+    tipoUsuario: "alumno" | "profesor";
+    onConfirm: () => void;
+    onCancel: () => void;
+  }) {
+    return (
+      <div className="space-y-4">
+        <div className="flex gap-4 items-center">
+          <Avatar className="h-16 w-16 border-2 border-red-300">
+            <AvatarImage src={usuario.foto_perfil || "/placeholder.svg"} />
+            <AvatarFallback>
+              {usuario.nombre_completo
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <h2 className="font-bold text-lg text-red-700">
+              ¿Eliminar {tipoUsuario === "alumno" ? "alumno" : "profesor"}?
+            </h2>
+            <TipoUsuarioBadge tipo={tipoUsuario} />
+          </div>
+        </div>
+        <p>
+          Esta acción{" "}
+          <span className="font-bold text-red-600">no se puede deshacer</span>.
+          ¿Seguro que deseas eliminar este{" "}
+          {tipoUsuario === "alumno" ? "alumno" : "profesor"}?
+        </p>
+        <DialogFooter>
+          <Button variant="destructive" onClick={onConfirm}>
+            Eliminar
+          </Button>
+          <Button variant="outline" onClick={onCancel}>
+            Cancelar
+          </Button>
+        </DialogFooter>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="alumnos" className="space-y-6">
@@ -447,7 +955,6 @@ export function GestionUsuarios() {
           <TabsTrigger value="alumnos">Alumnos</TabsTrigger>
           <TabsTrigger value="profesores">Profesores</TabsTrigger>
         </TabsList>
-
         <TabsContent value="alumnos">
           <Card>
             <CardHeader>
@@ -546,13 +1053,31 @@ export function GestionUsuarios() {
                             )}
                           </div>
                           <div className="flex items-center gap-1">
-                            <Button variant="outline" size="sm">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleVerUsuario(alumno, "alumno")}
+                            >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button variant="outline" size="sm">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleEditarUsuarioModal(alumno, "alumno")
+                              }
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="outline" size="sm">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setUsuarioSeleccionado(alumno);
+                                setTipoUsuario("alumno");
+                                setConfirmarEliminar(true);
+                              }}
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -573,7 +1098,6 @@ export function GestionUsuarios() {
             </CardContent>
           </Card>
         </TabsContent>
-
         <TabsContent value="profesores">
           <Card>
             <CardHeader>
@@ -664,13 +1188,33 @@ export function GestionUsuarios() {
                             {profesor.grupos_actuales} grupos
                           </Badge>
                           <div className="flex items-center gap-1">
-                            <Button variant="outline" size="sm">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleVerUsuario(profesor, "profesor")
+                              }
+                            >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button variant="outline" size="sm">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleEditarUsuarioModal(profesor, "profesor")
+                              }
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="outline" size="sm">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setUsuarioSeleccionado(profesor);
+                                setTipoUsuario("profesor");
+                                setConfirmarEliminar(true);
+                              }}
+                            >
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -699,6 +1243,103 @@ export function GestionUsuarios() {
         tipoUsuario={tipoUsuario}
         onCrearUsuario={handleCrearUsuario}
       />
+
+      {/* Modal de ver/editar usuario */}
+      <Dialog
+        open={!!modoDialogo}
+        onOpenChange={(v) => {
+          if (!v) {
+            setModoDialogo(null);
+            setUsuarioSeleccionado(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {modoDialogo === "ver"
+                ? `Ver perfil de ${tipoUsuario}`
+                : `Editar perfil de ${tipoUsuario}`}
+            </DialogTitle>
+            <DialogDescription>
+              {modoDialogo === "ver"
+                ? "Consulta los datos del usuario."
+                : "Edita los datos y guarda cambios."}
+            </DialogDescription>
+          </DialogHeader>
+          {usuarioSeleccionado &&
+            modoDialogo === "ver" &&
+            tipoUsuario === "alumno" && (
+              <VerPerfilAlumno
+                usuario={usuarioSeleccionado}
+                onClose={() => {
+                  setModoDialogo(null);
+                  setUsuarioSeleccionado(null);
+                }}
+              />
+            )}
+          {usuarioSeleccionado &&
+            modoDialogo === "ver" &&
+            tipoUsuario === "profesor" && (
+              <VerPerfilProfesor
+                usuario={usuarioSeleccionado}
+                onClose={() => {
+                  setModoDialogo(null);
+                  setUsuarioSeleccionado(null);
+                }}
+              />
+            )}
+          {usuarioSeleccionado &&
+            modoDialogo === "editar" &&
+            tipoUsuario === "alumno" && (
+              <EditarAlumnoForm
+                usuario={usuarioSeleccionado}
+                formData={formData}
+                setFormData={setFormData}
+                errorForm={errorForm}
+                onSubmit={handleGuardarEdicion}
+                onClose={() => {
+                  setModoDialogo(null);
+                  setUsuarioSeleccionado(null);
+                }}
+              />
+            )}
+          {usuarioSeleccionado &&
+            modoDialogo === "editar" &&
+            tipoUsuario === "profesor" && (
+              <EditarProfesorForm
+                usuario={usuarioSeleccionado}
+                formData={formData}
+                setFormData={setFormData}
+                errorForm={errorForm}
+                onSubmit={handleGuardarEdicion}
+                onClose={() => {
+                  setModoDialogo(null);
+                  setUsuarioSeleccionado(null);
+                }}
+              />
+            )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación de eliminación */}
+      <Dialog
+        open={confirmarEliminar}
+        onOpenChange={(v) => {
+          if (!v) setConfirmarEliminar(false);
+        }}
+      >
+        <DialogContent>
+          {usuarioSeleccionado && (
+            <EliminarUsuarioForm
+              usuario={usuarioSeleccionado}
+              tipoUsuario={tipoUsuario}
+              onConfirm={handleEliminarUsuarioConfirm}
+              onCancel={() => setConfirmarEliminar(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

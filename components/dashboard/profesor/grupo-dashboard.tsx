@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Clock, Plus, Users } from "lucide-react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { DashboardLayout } from "@/components/dashboard/layout/dashboard-layout";
@@ -33,6 +34,16 @@ export function GrupoDashboard({ grupoId }: GrupoDashboardProps) {
   const [grupo, setGrupo] = useState<GrupoInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [showNuevaSesion, setShowNuevaSesion] = useState(false);
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Lee el tab actual de la query string, por ejemplo ?tab=calendario
+  const tabActual = searchParams.get("tab") || "alumnos";
+
+  const handleTabChange = (tab: string) => {
+    router.replace(`?tab=${tab}`);
+  };
 
   useEffect(() => {
     async function fetchGrupoInfo() {
@@ -178,7 +189,11 @@ export function GrupoDashboard({ grupoId }: GrupoDashboardProps) {
         </Card>
 
         {/* Tabs de Contenido */}
-        <Tabs defaultValue="alumnos" className="space-y-6">
+        <Tabs
+          value={tabActual}
+          onValueChange={handleTabChange}
+          className="space-y-6"
+        >
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="alumnos">Lista de Alumnos</TabsTrigger>
             <TabsTrigger value="calendario">Calendario</TabsTrigger>
