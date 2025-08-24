@@ -5,28 +5,14 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+	Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+	Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { createClient } from "@/lib/auth-client";
 
@@ -60,6 +46,7 @@ export function GestionGrupos() {
     semestre: "",
     carrera_id: "",
     horario_tutoria: "",
+    fin_de_semestre: "",
     activo: true,
   });
 
@@ -88,6 +75,7 @@ export function GestionGrupos() {
       semestre: "",
       carrera_id: "",
       horario_tutoria: "",
+      fin_de_semestre: "",
       activo: true,
     });
     setShowDialog(true);
@@ -100,6 +88,9 @@ export function GestionGrupos() {
       semestre: grupo.semestre.toString(),
       carrera_id: grupo.carrera_id,
       horario_tutoria: grupo.horario_tutoria ?? "",
+      fin_de_semestre: grupo.fin_de_semestre
+        ? grupo.fin_de_semestre.split("T")[0]
+        : "",
       activo: grupo.activo,
     });
     setShowDialog(true);
@@ -116,6 +107,7 @@ export function GestionGrupos() {
           semestre: Number(formData.semestre),
           carrera_id: formData.carrera_id,
           horario_tutoria: formData.horario_tutoria,
+          fin_de_semestre: formData.fin_de_semestre || null,
           activo: formData.activo,
         })
         .eq("id", editando.id);
@@ -126,6 +118,7 @@ export function GestionGrupos() {
           semestre: Number(formData.semestre),
           carrera_id: formData.carrera_id,
           horario_tutoria: formData.horario_tutoria,
+          fin_de_semestre: formData.fin_de_semestre || null,
           activo: formData.activo,
         },
       ]);
@@ -328,6 +321,19 @@ export function GestionGrupos() {
                   setFormData((prev) => ({
                     ...prev,
                     horario_tutoria: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Fin de Semestre</Label>
+              <Input
+                type="date"
+                value={formData.fin_de_semestre}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    fin_de_semestre: e.target.value,
                   }))
                 }
               />

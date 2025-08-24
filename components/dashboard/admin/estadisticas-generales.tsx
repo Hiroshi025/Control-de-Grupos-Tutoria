@@ -3,30 +3,11 @@
 import { Calendar, GraduationCap, UserCheck, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
-  Bar,
-  BarChart,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
+	Bar, BarChart, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, XAxis, YAxis
 } from "recharts";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { createClient } from "@/lib/auth-client";
 
 interface EstadisticasData {
@@ -48,7 +29,8 @@ export function EstadisticasGenerales() {
   useEffect(() => {
     async function fetchStats() {
       const supabase = createClient();
-      // Ejemplo de consultas reales
+
+      // KPIs
       const { count: totalAlumnos } = await supabase
         .from("alumnos")
         .select("*", { count: "exact", head: true });
@@ -62,15 +44,69 @@ export function EstadisticasGenerales() {
         .from("sesiones_tutoria")
         .select("*", { count: "exact", head: true });
 
-      // Puedes agregar más consultas para KPIs y gráficas
+      // Alumnos por semestre
+      const { data: alumnosPorSemestreRaw } = await supabase
+        .from("alumnos")
+        .select("semestre_actual")
+        .then((res) => res);
+
+      const alumnosPorSemestre: Array<{ semestre: string; alumnos: number }> =
+        [];
+      if (alumnosPorSemestreRaw) {
+        const counts: Record<string, number> = {};
+        alumnosPorSemestreRaw.forEach((a: any) => {
+          const s = String(a.semestre_actual);
+          counts[s] = (counts[s] || 0) + 1;
+        });
+        Object.entries(counts).forEach(([semestre, alumnos]) =>
+          alumnosPorSemestre.push({ semestre, alumnos })
+        );
+      }
+
+      // Distribución Servicio Social
+      const { data: ssRaw } = await supabase
+        .from("alumnos")
+        .select("servicio_social_realizado");
+      let completado = 0,
+        pendiente = 0;
+      if (ssRaw) {
+        ssRaw.forEach((a: any) => {
+          if (a.servicio_social_realizado) completado++;
+          else pendiente++;
+        });
+      }
+      const distribucionSS = [
+        { name: "Completado", value: completado, color: "hsl(var(--chart-1))" },
+        { name: "Pendiente", value: pendiente, color: "hsl(var(--chart-2))" },
+      ];
+
+      // Sesiones por mes (últimos 12 meses)
+      const { data: sesionesRaw } = await supabase
+        .from("sesiones_tutoria")
+        .select("fecha_sesion");
+      const sesionesPorMes: Array<{ mes: string; sesiones: number }> = [];
+      if (sesionesRaw) {
+        const counts: Record<string, number> = {};
+        sesionesRaw.forEach((s: any) => {
+          const date = new Date(s.fecha_sesion);
+          const mes = `${date.getFullYear()}-${String(
+            date.getMonth() + 1
+          ).padStart(2, "0")}`;
+          counts[mes] = (counts[mes] || 0) + 1;
+        });
+        Object.entries(counts)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .forEach(([mes, sesiones]) => sesionesPorMes.push({ mes, sesiones }));
+      }
+
       setEstadisticas({
         totalAlumnos: totalAlumnos ?? 0,
         totalProfesores: totalProfesores ?? 0,
         totalGrupos: totalGrupos ?? 0,
         totalSesiones: totalSesiones ?? 0,
-        alumnosPorSemestre: [], // Llena con datos reales
-        distribucionSS: [], // Llena con datos reales
-        sesionesPorMes: [], // Llena con datos reales
+        alumnosPorSemestre,
+        distribucionSS,
+        sesionesPorMes,
       });
       setLoading(false);
     }
@@ -172,8 +208,8 @@ export function EstadisticasGenerales() {
       </div>
 
       {/* Gráficas */}
-      <div className="grid md:grid-cols-3 gap-6">
-        {/* Alumnos por Semestre */}
+      {/* Alumnos por Semestre en una fila completa */}
+      <div className="grid md:grid-cols-1 gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Alumnos por Semestre</CardTitle>
@@ -203,7 +239,9 @@ export function EstadisticasGenerales() {
             </ChartContainer>
           </CardContent>
         </Card>
-
+      </div>
+      {/* Servicio Social y Sesiones de Tutoría en la siguiente fila */}
+      <div className="grid md:grid-cols-2 gap-6">
         {/* Distribución Servicio Social */}
         <Card>
           <CardHeader>

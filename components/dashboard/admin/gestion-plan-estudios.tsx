@@ -5,28 +5,14 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+	Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+	Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { createClient } from "@/lib/auth-client";
 
@@ -39,14 +25,21 @@ interface Materia {
   carrera_id: string;
 }
 
+interface Carrera {
+  id: string;
+  nombre: string;
+  codigo: string;
+}
+
 export function GestionPlanEstudios() {
   const [materias, setMaterias] = useState<Materia[]>([]);
+  const [carreras, setCarreras] = useState<Carrera[]>([]);
+  const [carreraId, setCarreraId] = useState<string | null>(null);
   const [filtro, setFiltro] = useState("");
   const [semestreFiltro, setSemestreFiltro] = useState<string>("todos");
   const [loading, setLoading] = useState(true);
   const [showNuevaMateria, setShowNuevaMateria] = useState(false);
   const [materiaEditando, setMateriaEditando] = useState<Materia | null>(null);
-  const [carreraId, setCarreraId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -56,32 +49,41 @@ export function GestionPlanEstudios() {
   });
 
   useEffect(() => {
-    const fetchCarreraIdAndMaterias = async () => {
+    const fetchCarreras = async () => {
       setLoading(true);
       const supabase = createClient();
-      // 1. Obtener carrera_id de Ingeniería Electromecánica
-      const { data: carrera, error: carreraError } = await supabase
+      // Obtener todas las carreras
+      const { data: carrerasDb, error: carrerasError } = await supabase
         .from("carreras")
-        .select("id")
-        .eq("codigo", "IEME-2010-210")
-        .single();
-      if (carreraError || !carrera) {
-        setLoading(false);
-        return;
+        .select("*");
+      if (!carrerasError && carrerasDb) {
+        setCarreras(carrerasDb);
+        // Seleccionar la primera carrera por defecto si no hay ninguna seleccionada
+        if (!carreraId && carrerasDb.length > 0) {
+          setCarreraId(carrerasDb[0].id);
+        }
       }
-      setCarreraId(carrera.id);
-      // 2. Obtener materias de esa carrera
+      setLoading(false);
+    };
+    fetchCarreras();
+  }, []);
+
+  useEffect(() => {
+    const fetchMaterias = async () => {
+      if (!carreraId) return;
+      setLoading(true);
+      const supabase = createClient();
       const { data: materiasDb, error: materiasError } = await supabase
         .from("materias")
         .select("*")
-        .eq("carrera_id", carrera.id);
+        .eq("carrera_id", carreraId);
       if (!materiasError && materiasDb) {
         setMaterias(materiasDb);
       }
       setLoading(false);
     };
-    fetchCarreraIdAndMaterias();
-  }, []);
+    fetchMaterias();
+  }, [carreraId]);
 
   const materiasFiltradas = materias.filter((materia) => {
     const coincideFiltro =
@@ -140,7 +142,6 @@ export function GestionPlanEstudios() {
           tipo: formData.tipo,
         })
         .eq("id", materiaEditando.id);
-      // Refrescar materias
     } else {
       // Crear nueva materia en la DB
       await supabase.from("materias").insert([
@@ -152,7 +153,6 @@ export function GestionPlanEstudios() {
           carrera_id: carreraId,
         },
       ]);
-      // Refrescar materias
     }
     // Refrescar lista de materias
     const { data: materiasDb } = await supabase
@@ -168,7 +168,6 @@ export function GestionPlanEstudios() {
     const supabase = createClient();
     setLoading(true);
     await supabase.from("materias").delete().eq("id", id);
-    // Refrescar lista de materias
     if (carreraId) {
       const { data: materiasDb } = await supabase
         .from("materias")
@@ -188,10 +187,10 @@ export function GestionPlanEstudios() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <BookOpen className="h-5 w-5" />
-                Plan de Estudios - Ingeniería Electromecánica
+                Plan de Estudios
               </CardTitle>
               <CardDescription>
-                Administra las materias del plan de estudios
+                Administra las materias del plan de estudios por carrera
               </CardDescription>
             </div>
             <Button onClick={handleNuevaMateria}>
@@ -202,6 +201,22 @@ export function GestionPlanEstudios() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4">
+            {/* Menú de selección de carrera */}
+            <Select
+              value={carreraId ?? ""}
+              onValueChange={(value) => setCarreraId(value)}
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Selecciona una carrera" />
+              </SelectTrigger>
+              <SelectContent>
+                {carreras.map((carrera) => (
+                  <SelectItem key={carrera.id} value={carrera.id}>
+                    {carrera.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input

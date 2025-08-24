@@ -6,14 +6,13 @@ import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+	Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/auth-client";
 
 interface ListaAlumnosProps {
@@ -31,12 +30,27 @@ interface Alumno {
   servicio_social_realizado: boolean;
   residencia_profesional_realizada: boolean;
   riesgo_nivel: "alto" | "medio" | "bajo";
+  correo_institucional?: string;
+  edad?: number;
+  fecha_inscripcion?: string;
+  materias_sin_cursar?: number;
+  materias_en_especial?: number;
 }
 
 export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
   const [alumnos, setAlumnos] = useState<Alumno[]>([]);
   const [filtro, setFiltro] = useState("");
   const [loading, setLoading] = useState(true);
+  const [agendarAlumnoId, setAgendarAlumnoId] = useState<string | null>(null);
+  const [verPerfilAlumnoId, setVerPerfilAlumnoId] = useState<string | null>(
+    null
+  );
+  const [perfilAlumno, setPerfilAlumno] = useState<Alumno | null>(null);
+  const [agendarLoading, setAgendarLoading] = useState(false);
+  const [agendarError, setAgendarError] = useState<string | null>(null);
+  const [agendarSuccess, setAgendarSuccess] = useState(false);
+  const [agendarObjetivos, setAgendarObjetivos] = useState("");
+  const [agendarFecha, setAgendarFecha] = useState("");
 
   useEffect(() => {
     async function fetchAlumnos() {
@@ -63,7 +77,9 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
         // Obtener datos de los alumnos
         const { data: alumnosData, error: errorAlumnos } = await supabase
           .from("alumnos")
-          .select("*")
+          .select(
+            "id, matricula, nombre_completo, semestre_actual, foto_credencial, materias_en_recurso, materias_aprobadas, servicio_social_realizado, residencia_profesional_realizada, correo_institucional, edad, fecha_inscripcion, materias_sin_cursar, materias_en_especial"
+          )
           .in("id", alumnoIds);
         if (!alumnosData || errorAlumnos) {
           setAlumnos([]);
@@ -85,6 +101,28 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
     }
     fetchAlumnos();
   }, [grupoId]);
+
+  // Modal: cargar datos completos del alumno
+  useEffect(() => {
+    async function fetchPerfilAlumno() {
+      if (!verPerfilAlumnoId) {
+        setPerfilAlumno(null);
+        return;
+      }
+      const supabase = createClient();
+      const { data: alumno, error } = await supabase
+        .from("alumnos")
+        .select("*")
+        .eq("id", verPerfilAlumnoId)
+        .single();
+      if (alumno && !error) {
+        setPerfilAlumno(alumno);
+      } else {
+        setPerfilAlumno(null);
+      }
+    }
+    fetchPerfilAlumno();
+  }, [verPerfilAlumnoId]);
 
   const alumnosFiltrados = alumnos.filter(
     (alumno) =>
@@ -112,6 +150,65 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
     if (alumno.materias_aprobadas < alumno.semestre_actual * 4)
       riesgos.push("Bajo rendimiento académico");
     return riesgos.join(", ") || "Sin riesgos identificados";
+  };
+
+  // Handler para ver perfil
+  const handleVerPerfil = (alumnoId: string) => {
+    setVerPerfilAlumnoId(alumnoId);
+  };
+
+  // Handler para cerrar modal de perfil
+  const handleCerrarPerfil = () => {
+    setVerPerfilAlumnoId(null);
+    setPerfilAlumno(null);
+  };
+
+  // Handler para agendar sesión
+  const handleAgendar = (alumnoId: string) => {
+    setAgendarAlumnoId(alumnoId);
+    setAgendarObjetivos("");
+    setAgendarFecha("");
+    setAgendarError(null);
+    setAgendarSuccess(false);
+  };
+
+  // Handler para guardar sesión agendada
+  const handleGuardarAgendar = async () => {
+    if (!agendarAlumnoId || !agendarFecha) {
+      setAgendarError("Debes seleccionar una fecha.");
+      return;
+    }
+    setAgendarLoading(true);
+    setAgendarError(null);
+    try {
+      const supabase = createClient();
+      // Obtener grupo y profesor
+      const { data: grupo } = await supabase
+        .from("grupos")
+        .select("id, profesor_id")
+        .eq("id", grupoId)
+        .single();
+      const profesorId = grupo?.profesor_id;
+      // Insertar sesión individual
+      const { error } = await supabase.from("sesiones_tutoria").insert([
+        {
+          profesor_id: profesorId,
+          grupo_id: grupoId,
+          alumno_id: agendarAlumnoId,
+          tipo: "individual",
+          fecha_sesion: agendarFecha,
+          objetivos: agendarObjetivos,
+        },
+      ]);
+      if (error) {
+        setAgendarError("Error al agendar la sesión.");
+      } else {
+        setAgendarSuccess(true);
+      }
+    } catch (err) {
+      setAgendarError("Error de conexión.");
+    }
+    setAgendarLoading(false);
   };
 
   return (
@@ -204,11 +301,19 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
                         ? "Riesgo Medio"
                         : "Sin Riesgo"}
                     </Badge>
-                    <Button variant="outline" size="sm">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleVerPerfil(alumno.id)}
+                    >
                       <Eye className="h-4 w-4 mr-2" />
                       Ver Perfil
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAgendar(alumno.id)}
+                    >
                       <Calendar className="h-4 w-4 mr-2" />
                       Agendar
                     </Button>
@@ -227,6 +332,153 @@ export function ListaAlumnos({ grupoId }: ListaAlumnosProps) {
           </div>
         )}
       </CardContent>
+
+      {/* Modal Perfil Alumno */}
+      <Dialog open={!!verPerfilAlumnoId} onOpenChange={handleCerrarPerfil}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Perfil del Alumno</DialogTitle>
+            <DialogDescription>
+              Información completa del estudiante
+            </DialogDescription>
+          </DialogHeader>
+          {perfilAlumno ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-4 mb-2">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage
+                    src={perfilAlumno.foto_credencial || "/placeholder.svg"}
+                  />
+                  <AvatarFallback>
+                    {perfilAlumno.nombre_completo
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="font-bold text-lg">
+                    {perfilAlumno.nombre_completo}
+                  </h3>
+                  <p className="text-muted-foreground">
+                    {perfilAlumno.matricula}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <Label>Correo institucional:</Label>
+                  <div>{perfilAlumno.correo_institucional}</div>
+                </div>
+                <div>
+                  <Label>Edad:</Label>
+                  <div>{perfilAlumno.edad ?? "N/A"}</div>
+                </div>
+                <div>
+                  <Label>Semestre actual:</Label>
+                  <div>{perfilAlumno.semestre_actual}°</div>
+                </div>
+                <div>
+                  <Label>Fecha inscripción:</Label>
+                  <div>{perfilAlumno.fecha_inscripcion ?? "N/A"}</div>
+                </div>
+                <div>
+                  <Label>Materias aprobadas:</Label>
+                  <div>{perfilAlumno.materias_aprobadas}</div>
+                </div>
+                <div>
+                  <Label>Materias en recurso:</Label>
+                  <div>{perfilAlumno.materias_en_recurso}</div>
+                </div>
+                <div>
+                  <Label>Materias en especial:</Label>
+                  <div>{perfilAlumno.materias_en_especial ?? 0}</div>
+                </div>
+                <div>
+                  <Label>Materias sin cursar:</Label>
+                  <div>{perfilAlumno.materias_sin_cursar ?? 0}</div>
+                </div>
+                <div>
+                  <Label>Servicio social:</Label>
+                  <div>
+                    {perfilAlumno.servicio_social_realizado
+                      ? "Completado"
+                      : "Pendiente"}
+                  </div>
+                </div>
+                <div>
+                  <Label>Residencia profesional:</Label>
+                  <div>
+                    {perfilAlumno.residencia_profesional_realizada
+                      ? "Completada"
+                      : "Pendiente"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No se pudo cargar el perfil del alumno.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Agendar Sesión */}
+      <Dialog
+        open={!!agendarAlumnoId}
+        onOpenChange={() => setAgendarAlumnoId(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agendar Sesión Individual</DialogTitle>
+            <DialogDescription>
+              Selecciona la fecha y objetivos para la sesión con el alumno.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Fecha y hora de la sesión</Label>
+              <Input
+                type="datetime-local"
+                value={agendarFecha}
+                onChange={(e) => setAgendarFecha(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Objetivos de la sesión</Label>
+              <Textarea
+                value={agendarObjetivos}
+                onChange={(e) => setAgendarObjetivos(e.target.value)}
+                placeholder="Describe los objetivos o temas a tratar..."
+              />
+            </div>
+            {agendarError && (
+              <div className="text-destructive text-sm">{agendarError}</div>
+            )}
+            {agendarSuccess && (
+              <div className="text-green-600 text-sm">
+                Sesión agendada correctamente.
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setAgendarAlumnoId(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleGuardarAgendar}
+                disabled={agendarLoading || !agendarFecha}
+              >
+                Agendar Sesión
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

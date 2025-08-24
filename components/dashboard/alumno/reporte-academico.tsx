@@ -5,20 +5,10 @@ import { useEffect, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+	Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/auth-client";
@@ -41,10 +31,12 @@ export function ReporteAcademico({ alumnoId, tutorId }: ReporteAcademicoProps) {
     { id: string; nombre: string; clave: string }[]
   >([]);
   const [loadingMaterias, setLoadingMaterias] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchMaterias() {
       setLoadingMaterias(true);
+      setErrorMsg(null);
       try {
         const supabase = createClient();
         // Obtener el alumno para saber su carrera y semestre
@@ -56,6 +48,7 @@ export function ReporteAcademico({ alumnoId, tutorId }: ReporteAcademicoProps) {
         if (!alumno || errorAlumno) {
           setMaterias([]);
           setLoadingMaterias(false);
+          setErrorMsg("No se pudo obtener los datos del alumno.");
           return;
         }
         // Obtener materias de la carrera y semestre actual
@@ -64,9 +57,13 @@ export function ReporteAcademico({ alumnoId, tutorId }: ReporteAcademicoProps) {
           .select("id, nombre, clave")
           .eq("carrera_id", alumno.carrera_id)
           .eq("semestre", alumno.semestre_actual);
+        if (errorMaterias) {
+          setErrorMsg("No se pudo obtener las materias.");
+        }
         setMaterias(materiasData || []);
       } catch (err) {
         setMaterias([]);
+        setErrorMsg("Error de conexión con la base de datos.");
       }
       setLoadingMaterias(false);
     }
@@ -84,20 +81,57 @@ export function ReporteAcademico({ alumnoId, tutorId }: ReporteAcademicoProps) {
   };
 
   const handleEnviarReporte = async () => {
-    if (!parcial || materiasSeleccionadas.length === 0) return;
+    setErrorMsg(null);
+    if (!parcial) {
+      setErrorMsg("Selecciona el parcial.");
+      return;
+    }
+    if (materiasSeleccionadas.length === 0) {
+      setErrorMsg("Selecciona al menos una materia reprobada.");
+      return;
+    }
 
     setEnviando(true);
 
     try {
-      const materiasReportadas = materias
-        .filter((materia) => materiasSeleccionadas.includes(materia.id))
-        .map((materia) => materia.nombre);
+      const supabase = createClient();
+      // Obtener datos del alumno
+      const { data: alumno } = await supabase
+        .from("alumnos")
+        .select("semestre_actual")
+        .eq("id", alumnoId)
+        .single();
 
+      // Obtener datos de las materias seleccionadas
+      const materiasReportadas = materias.filter((materia) =>
+        materiasSeleccionadas.includes(materia.id)
+      );
+
+      // Insertar reportes en la tabla reportes_parciales
+      const { error: insertError } = await supabase
+        .from("reportes_parciales")
+        .insert(
+          materiasReportadas.map((materia) => ({
+            materia: materia.nombre,
+            motivo: "Reprobada en el parcial", // Se puede mejorar para capturar motivo real
+            profesor: "", // Si se requiere, buscar el profesor de la materia
+            parcial: parcial === "final" ? 3 : Number(parcial),
+            alumno_id: alumnoId,
+            semestre: String(alumno?.semestre_actual || ""),
+          }))
+        );
+      if (insertError) {
+        setErrorMsg("Error al guardar el reporte: " + insertError.message);
+        setEnviando(false);
+        return;
+      }
+
+      // Notificar al tutor si existe
       if (tutorId && user?.id) {
         await notificationService.notificarReporteAcademico(
           user.id,
           tutorId,
-          materiasReportadas,
+          materiasReportadas.map((m) => m.nombre),
           parcial === "final" ? "Examen Final" : `${parcial}° Parcial`
         );
       }
@@ -106,10 +140,9 @@ export function ReporteAcademico({ alumnoId, tutorId }: ReporteAcademicoProps) {
       setEnviando(false);
       setParcial("");
       setMateriasSeleccionadas([]);
-
       setTimeout(() => setEnviado(false), 3000);
-    } catch (error) {
-      console.error("Error enviando reporte:", error);
+    } catch (error: any) {
+      setErrorMsg("Error inesperado al enviar el reporte.");
       setEnviando(false);
     }
   };
@@ -199,6 +232,12 @@ export function ReporteAcademico({ alumnoId, tutorId }: ReporteAcademicoProps) {
             )}
           </div>
         </div>
+
+        {errorMsg && (
+          <div className="text-red-600 text-sm font-semibold mb-2">
+            {errorMsg}
+          </div>
+        )}
 
         <Button
           onClick={handleEnviarReporte}

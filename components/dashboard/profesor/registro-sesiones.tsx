@@ -5,20 +5,13 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+	Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+	Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { createClient } from "@/lib/auth-client";
 
@@ -34,6 +27,8 @@ interface SesionRegistrada {
   temas_tratados?: string;
   acuerdos_compromisos?: string;
   alumno_nombre?: string;
+  materias_reprobadas_parcial?: string[];
+  materias_a_recurso_final?: string[];
 }
 
 export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
@@ -41,6 +36,10 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
   const [filtro, setFiltro] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState<string>("todos");
   const [loading, setLoading] = useState(true);
+  const [showReporte, setShowReporte] = useState(false);
+  const [sesionReporte, setSesionReporte] = useState<SesionRegistrada | null>(
+    null
+  );
 
   useEffect(() => {
     async function fetchSesiones() {
@@ -51,7 +50,7 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
         const { data: sesionesData, error } = await supabase
           .from("sesiones_tutoria")
           .select(
-            "id, fecha_sesion, tipo, objetivos, temas_tratados, acuerdos_compromisos, alumno_id"
+            "id, fecha_sesion, tipo, objetivos, temas_tratados, acuerdos_compromisos, alumno_id, materias_reprobadas_parcial, materias_a_recurso_final"
           )
           .eq("grupo_id", grupoId)
           .order("fecha_sesion", { ascending: false });
@@ -90,6 +89,20 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
               sesion.tipo === "individual" && sesion.alumno_id
                 ? alumnosMap[sesion.alumno_id]
                 : undefined,
+            materias_reprobadas_parcial: Array.isArray(
+              sesion.materias_reprobadas_parcial
+            )
+              ? sesion.materias_reprobadas_parcial
+              : sesion.materias_reprobadas_parcial
+              ? JSON.parse(sesion.materias_reprobadas_parcial)
+              : [],
+            materias_a_recurso_final: Array.isArray(
+              sesion.materias_a_recurso_final
+            )
+              ? sesion.materias_a_recurso_final
+              : sesion.materias_a_recurso_final
+              ? JSON.parse(sesion.materias_a_recurso_final)
+              : [],
           }))
         );
       } catch (err) {
@@ -102,14 +115,23 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
 
   const sesionesFiltradas = sesiones.filter((sesion) => {
     const coincideFiltro =
-      sesion.objetivos?.toLowerCase().includes(filtro.toLowerCase()) ||
-      sesion.temas_tratados?.toLowerCase().includes(filtro.toLowerCase()) ||
-      sesion.alumno_nombre?.toLowerCase().includes(filtro.toLowerCase());
+      (sesion.objetivos?.toLowerCase().includes(filtro.toLowerCase()) ??
+        false) ||
+      (sesion.temas_tratados?.toLowerCase().includes(filtro.toLowerCase()) ??
+        false) ||
+      (sesion.alumno_nombre?.toLowerCase().includes(filtro.toLowerCase()) ??
+        false);
 
     const coincideTipo = tipoFiltro === "todos" || sesion.tipo === tipoFiltro;
 
     return coincideFiltro && coincideTipo;
   });
+
+  // Handler para mostrar el reporte
+  const handleGenerarReporte = (sesion: SesionRegistrada) => {
+    setSesionReporte(sesion);
+    setShowReporte(true);
+  };
 
   return (
     <Card>
@@ -203,7 +225,11 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
                       </div>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleGenerarReporte(sesion)}
+                  >
                     Generar Reporte
                   </Button>
                 </div>
@@ -243,12 +269,119 @@ export function RegistroSesiones({ grupoId }: RegistroSesionesProps) {
                       <p className="text-sm">{sesion.acuerdos_compromisos}</p>
                     </div>
                   )}
+
+                  {sesion.materias_reprobadas_parcial &&
+                    sesion.materias_reprobadas_parcial.length > 0 && (
+                      <div>
+                        <h4 className="font-medium text-sm text-muted-foreground mb-2">
+                          Materias Reprobadas en Parcial
+                        </h4>
+                        <ul className="list-disc ml-5 text-sm">
+                          {sesion.materias_reprobadas_parcial.map(
+                            (mat, idx) => (
+                              <li key={idx}>{mat}</li>
+                            )
+                          )}
+                        </ul>
+                      </div>
+                    )}
+
+                  {sesion.materias_a_recurso_final &&
+                    sesion.materias_a_recurso_final.length > 0 && (
+                      <div>
+                        <h4 className="font-medium text-sm text-muted-foreground mb-2">
+                          Materias que van a Recurso
+                        </h4>
+                        <ul className="list-disc ml-5 text-sm">
+                          {sesion.materias_a_recurso_final.map((mat, idx) => (
+                            <li key={idx}>{mat}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </CardContent>
+      {/* Modal para reporte detallado */}
+      <Dialog open={showReporte} onOpenChange={setShowReporte}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reporte de Sesión</DialogTitle>
+            <DialogDescription>
+              Detalles completos de la sesión seleccionada
+            </DialogDescription>
+          </DialogHeader>
+          {sesionReporte && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge
+                  variant={
+                    sesionReporte.tipo === "grupal" ? "secondary" : "outline"
+                  }
+                >
+                  {sesionReporte.tipo === "grupal"
+                    ? "Sesión Grupal"
+                    : "Sesión Individual"}
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  {new Date(sesionReporte.fecha_sesion).toLocaleString("es-MX")}
+                </span>
+              </div>
+              {sesionReporte.alumno_nombre && (
+                <div className="mb-2">
+                  <strong>Alumno:</strong> {sesionReporte.alumno_nombre}
+                </div>
+              )}
+              {sesionReporte.objetivos && (
+                <div>
+                  <strong>Objetivos:</strong> {sesionReporte.objetivos}
+                </div>
+              )}
+              {sesionReporte.temas_tratados && (
+                <div>
+                  <strong>Temas Tratados:</strong>{" "}
+                  {sesionReporte.temas_tratados}
+                </div>
+              )}
+              {sesionReporte.acuerdos_compromisos && (
+                <div>
+                  <strong>Acuerdos y Compromisos:</strong>{" "}
+                  {sesionReporte.acuerdos_compromisos}
+                </div>
+              )}
+              {sesionReporte.materias_reprobadas_parcial &&
+                sesionReporte.materias_reprobadas_parcial.length > 0 && (
+                  <div>
+                    <strong>Materias Reprobadas en Parcial:</strong>
+                    <ul className="list-disc ml-5">
+                      {sesionReporte.materias_reprobadas_parcial.map(
+                        (mat, idx) => (
+                          <li key={idx}>{mat}</li>
+                        )
+                      )}
+                    </ul>
+                  </div>
+                )}
+              {sesionReporte.materias_a_recurso_final &&
+                sesionReporte.materias_a_recurso_final.length > 0 && (
+                  <div>
+                    <strong>Materias que van a Recurso:</strong>
+                    <ul className="list-disc ml-5">
+                      {sesionReporte.materias_a_recurso_final.map(
+                        (mat, idx) => (
+                          <li key={idx}>{mat}</li>
+                        )
+                      )}
+                    </ul>
+                  </div>
+                )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

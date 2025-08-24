@@ -1,80 +1,201 @@
-"use client"
+"use client";
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, Clock, Save } from "lucide-react"
-import { useState } from "react"
+import { Calendar, Clock, Save } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+	Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+	Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { createClient } from "@/lib/auth-client";
 
 interface NuevaSesionDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  grupoId: string
-  grupoNombre: string
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  grupoId: string;
+  grupoNombre: string;
 }
 
-export function NuevaSesionDialog({ open, onOpenChange, grupoId, grupoNombre }: NuevaSesionDialogProps) {
-  const [tipo, setTipo] = useState<"grupal" | "individual">("grupal")
-  const [fecha, setFecha] = useState("")
-  const [hora, setHora] = useState("")
-  const [objetivos, setObjetivos] = useState("")
-  const [temasTratar, setTemasTratar] = useState("")
-  const [alumnoSeleccionado, setAlumnoSeleccionado] = useState("")
-  const [materiasReprobadas, setMateriasReprobadas] = useState<string[]>([])
-  const [guardando, setGuardando] = useState(false)
+export function NuevaSesionDialog({
+  open,
+  onOpenChange,
+  grupoId,
+  grupoNombre,
+}: NuevaSesionDialogProps) {
+  const [tipo, setTipo] = useState<"grupal" | "individual">("grupal");
+  const [fecha, setFecha] = useState("");
+  const [hora, setHora] = useState("");
+  const [objetivos, setObjetivos] = useState("");
+  const [temasTratar, setTemasTratar] = useState("");
+  const [alumnoSeleccionado, setAlumnoSeleccionado] = useState("");
+  const [materiasReprobadasParcial, setMateriasReprobadasParcial] = useState<
+    string[]
+  >([]);
+  const [materiasReprobadasFinal, setMateriasReprobadasFinal] = useState<
+    string[]
+  >([]);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
-  // Datos de ejemplo - en implementación real vendrían de la API
-  const alumnos = [
-    { id: "1", nombre: "Ana García López", matricula: "20240001" },
-    { id: "2", nombre: "Carlos Mendoza Ruiz", matricula: "20240002" },
-    { id: "3", nombre: "María Elena Sánchez", matricula: "20240003" },
-  ]
+  const [alumnos, setAlumnos] = useState<
+    { id: string; nombre: string; matricula: string }[]
+  >([]);
+  const [materias, setMaterias] = useState<
+    { id: string; nombre: string; clave: string }[]
+  >([]);
 
-  const materias = [
-    { id: "1", nombre: "Cálculo Diferencial", clave: "ACF-0901" },
-    { id: "2", nombre: "Física I", clave: "AEF-1015" },
-    { id: "3", nombre: "Química", clave: "AEF-1052" },
-    { id: "4", nombre: "Dibujo Técnico", clave: "AEC-1008" },
-  ]
-
-  const handleMateriaChange = (materiaId: string, checked: boolean) => {
-    if (checked) {
-      setMateriasReprobadas([...materiasReprobadas, materiaId])
-    } else {
-      setMateriasReprobadas(materiasReprobadas.filter((id) => id !== materiaId))
+  useEffect(() => {
+    async function fetchAlumnosMaterias() {
+      const supabase = createClient();
+      // Alumnos activos en el grupo
+      const { data: alumnoGrupo } = await supabase
+        .from("alumno_grupo")
+        .select("alumno_id")
+        .eq("grupo_id", grupoId)
+        .eq("activo", true);
+      const alumnoIds = alumnoGrupo?.map((ag: any) => ag.alumno_id) ?? [];
+      if (alumnoIds.length > 0) {
+        const { data: alumnosData } = await supabase
+          .from("alumnos")
+          .select("id, nombre_completo, matricula")
+          .in("id", alumnoIds);
+        setAlumnos(
+          (alumnosData ?? []).map((a: any) => ({
+            id: a.id,
+            nombre: a.nombre_completo,
+            matricula: a.matricula,
+          }))
+        );
+      } else {
+        setAlumnos([]);
+      }
+      // Materias del grupo (por carrera y semestre)
+      const { data: grupo } = await supabase
+        .from("grupos")
+        .select("carrera_id, semestre")
+        .eq("id", grupoId)
+        .single();
+      if (grupo) {
+        const { data: materiasData } = await supabase
+          .from("materias")
+          .select("id, nombre, clave")
+          .eq("carrera_id", grupo.carrera_id)
+          .eq("semestre", grupo.semestre);
+        setMaterias(materiasData ?? []);
+      } else {
+        setMaterias([]);
+      }
     }
-  }
+    if (open) fetchAlumnosMaterias();
+  }, [open, grupoId]);
+
+  const handleMateriaChange = (
+    materiaId: string,
+    checked: boolean,
+    tipoReporte: "parcial" | "final"
+  ) => {
+    if (tipoReporte === "parcial") {
+      setMateriasReprobadasParcial(
+        checked
+          ? [...materiasReprobadasParcial, materiaId]
+          : materiasReprobadasParcial.filter((id) => id !== materiaId)
+      );
+    } else {
+      setMateriasReprobadasFinal(
+        checked
+          ? [...materiasReprobadasFinal, materiaId]
+          : materiasReprobadasFinal.filter((id) => id !== materiaId)
+      );
+    }
+  };
 
   const handleGuardar = async () => {
-    setGuardando(true)
+    setGuardando(true);
+    setError(null);
+    setSuccess(false);
+    try {
+      const supabase = createClient();
+      // Obtener profesor_id del grupo
+      const { data: grupo } = await supabase
+        .from("grupos")
+        .select("profesor_id")
+        .eq("id", grupoId)
+        .single();
+      const profesorId = grupo?.profesor_id;
 
-    // Simular guardado
-    setTimeout(() => {
-      setGuardando(false)
-      onOpenChange(false)
+      // Construir fecha y hora en formato ISO
+      let fechaSesion = "";
+      if (fecha && hora) {
+        fechaSesion = new Date(`${fecha}T${hora}`).toISOString();
+      } else if (fecha) {
+        fechaSesion = new Date(fecha).toISOString();
+      }
+
+      // Insertar sesión en la DB
+      const { error: sesionError } = await supabase
+        .from("sesiones_tutoria")
+        .insert([
+          {
+            profesor_id: profesorId,
+            grupo_id: grupoId,
+            alumno_id: tipo === "individual" ? alumnoSeleccionado : null,
+            tipo,
+            fecha_sesion: fechaSesion,
+            objetivos,
+            temas_tratados: temasTratar,
+            materias_reprobadas_parcial:
+              materiasReprobadasParcial.length > 0
+                ? materiasReprobadasParcial
+                : null,
+            materias_a_recurso_final:
+              materiasReprobadasFinal.length > 0
+                ? materiasReprobadasFinal
+                : null,
+          },
+        ]);
+      if (sesionError) {
+        setError("Error al guardar la sesión.");
+        setGuardando(false);
+        return;
+      }
+      setSuccess(true);
       // Reset form
-      setTipo("grupal")
-      setFecha("")
-      setHora("")
-      setObjetivos("")
-      setTemasTratar("")
-      setAlumnoSeleccionado("")
-      setMateriasReprobadas([])
-    }, 1500)
-  }
+      setTipo("grupal");
+      setFecha("");
+      setHora("");
+      setObjetivos("");
+      setTemasTratar("");
+      setAlumnoSeleccionado("");
+      setMateriasReprobadasParcial([]);
+      setMateriasReprobadasFinal([]);
+      setTimeout(() => {
+        setSuccess(false);
+        onOpenChange(false);
+      }, 1200);
+    } catch (err) {
+      setError("Error de conexión.");
+    }
+    setGuardando(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nueva Sesión de Tutoría</DialogTitle>
-          <DialogDescription>Registra una nueva sesión para el grupo {grupoNombre}</DialogDescription>
+          <DialogDescription>
+            Registra una nueva sesión para el grupo {grupoNombre}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -87,13 +208,20 @@ export function NuevaSesionDialog({ open, onOpenChange, grupoId, grupoNombre }: 
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tipo de Sesión</Label>
-                  <Select value={tipo} onValueChange={(value: "grupal" | "individual") => setTipo(value)}>
+                  <Select
+                    value={tipo}
+                    onValueChange={(value: "grupal" | "individual") =>
+                      setTipo(value)
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="grupal">Sesión Grupal</SelectItem>
-                      <SelectItem value="individual">Sesión Individual</SelectItem>
+                      <SelectItem value="individual">
+                        Sesión Individual
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -101,7 +229,10 @@ export function NuevaSesionDialog({ open, onOpenChange, grupoId, grupoNombre }: 
                 {tipo === "individual" && (
                   <div className="space-y-2">
                     <Label>Alumno</Label>
-                    <Select value={alumnoSeleccionado} onValueChange={setAlumnoSeleccionado}>
+                    <Select
+                      value={alumnoSeleccionado}
+                      onValueChange={setAlumnoSeleccionado}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona un alumno" />
                       </SelectTrigger>
@@ -122,7 +253,12 @@ export function NuevaSesionDialog({ open, onOpenChange, grupoId, grupoNombre }: 
                   <Label>Fecha</Label>
                   <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="pl-10" />
+                    <Input
+                      type="date"
+                      value={fecha}
+                      onChange={(e) => setFecha(e.target.value)}
+                      className="pl-10"
+                    />
                   </div>
                 </div>
 
@@ -130,7 +266,12 @@ export function NuevaSesionDialog({ open, onOpenChange, grupoId, grupoNombre }: 
                   <Label>Hora</Label>
                   <div className="relative">
                     <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="pl-10" />
+                    <Input
+                      type="time"
+                      value={hora}
+                      onChange={(e) => setHora(e.target.value)}
+                      className="pl-10"
+                    />
                   </div>
                 </div>
               </div>
@@ -169,7 +310,9 @@ export function NuevaSesionDialog({ open, onOpenChange, grupoId, grupoNombre }: 
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Reporte Académico</CardTitle>
-              <CardDescription>Registra materias reprobadas o en riesgo (opcional)</CardDescription>
+              <CardDescription>
+                Registra materias reprobadas o en riesgo (opcional)
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="parcial" className="space-y-4">
@@ -183,13 +326,27 @@ export function NuevaSesionDialog({ open, onOpenChange, grupoId, grupoNombre }: 
                     <Label>Materias Reprobadas en Parcial</Label>
                     <div className="grid md:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                       {materias.map((materia) => (
-                        <div key={materia.id} className="flex items-center space-x-2">
+                        <div
+                          key={materia.id}
+                          className="flex items-center space-x-2"
+                        >
                           <Checkbox
                             id={`parcial-${materia.id}`}
-                            checked={materiasReprobadas.includes(materia.id)}
-                            onCheckedChange={(checked) => handleMateriaChange(materia.id, checked as boolean)}
+                            checked={materiasReprobadasParcial.includes(
+                              materia.id
+                            )}
+                            onCheckedChange={(checked) =>
+                              handleMateriaChange(
+                                materia.id,
+                                checked as boolean,
+                                "parcial"
+                              )
+                            }
                           />
-                          <label htmlFor={`parcial-${materia.id}`} className="text-sm cursor-pointer">
+                          <label
+                            htmlFor={`parcial-${materia.id}`}
+                            className="text-sm cursor-pointer"
+                          >
                             {materia.nombre} ({materia.clave})
                           </label>
                         </div>
@@ -203,13 +360,27 @@ export function NuevaSesionDialog({ open, onOpenChange, grupoId, grupoNombre }: 
                     <Label>Materias que van a Recurso</Label>
                     <div className="grid md:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                       {materias.map((materia) => (
-                        <div key={materia.id} className="flex items-center space-x-2">
+                        <div
+                          key={materia.id}
+                          className="flex items-center space-x-2"
+                        >
                           <Checkbox
                             id={`final-${materia.id}`}
-                            checked={materiasReprobadas.includes(materia.id)}
-                            onCheckedChange={(checked) => handleMateriaChange(materia.id, checked as boolean)}
+                            checked={materiasReprobadasFinal.includes(
+                              materia.id
+                            )}
+                            onCheckedChange={(checked) =>
+                              handleMateriaChange(
+                                materia.id,
+                                checked as boolean,
+                                "final"
+                              )
+                            }
                           />
-                          <label htmlFor={`final-${materia.id}`} className="text-sm cursor-pointer">
+                          <label
+                            htmlFor={`final-${materia.id}`}
+                            className="text-sm cursor-pointer"
+                          >
                             {materia.nombre} ({materia.clave})
                           </label>
                         </div>
@@ -221,12 +392,28 @@ export function NuevaSesionDialog({ open, onOpenChange, grupoId, grupoNombre }: 
             </CardContent>
           </Card>
 
+          {/* Mensajes de estado */}
+          {error && <div className="text-destructive text-sm">{error}</div>}
+          {success && (
+            <div className="text-green-600 text-sm">
+              Sesión registrada correctamente.
+            </div>
+          )}
+
           {/* Botones de Acción */}
           <div className="flex justify-end gap-4">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleGuardar} disabled={guardando || !fecha || !hora}>
+            <Button
+              onClick={handleGuardar}
+              disabled={
+                guardando ||
+                !fecha ||
+                !hora ||
+                (tipo === "individual" && !alumnoSeleccionado)
+              }
+            >
               {guardando ? "Guardando..." : "Guardar Sesión"}
               <Save className="h-4 w-4 ml-2" />
             </Button>
@@ -234,5 +421,5 @@ export function NuevaSesionDialog({ open, onOpenChange, grupoId, grupoNombre }: 
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS grupos (
     semestre INTEGER NOT NULL CHECK (semestre >= 1 AND semestre <= 12),
     horario_tutoria VARCHAR(100),
     activo BOOLEAN DEFAULT true,
+    fin_de_semestre DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -71,6 +72,7 @@ CREATE TABLE IF NOT EXISTS alumnos (
     materias_sin_cursar INTEGER DEFAULT 0,
     materias_en_recurso INTEGER DEFAULT 0,
     materias_en_especial INTEGER DEFAULT 0,
+    materias_actualmente_cursando INTEGER DEFAULT 0,
     servicio_social_realizado BOOLEAN DEFAULT false,
     residencia_profesional_realizada BOOLEAN DEFAULT false,
     password_hash VARCHAR(255) NOT NULL,
@@ -142,6 +144,16 @@ CREATE TABLE IF NOT EXISTS reportes_parciales (
   parcial INTEGER NOT NULL CHECK (parcial >= 1 AND parcial <= 3),
   semestre VARCHAR(20) NOT NULL,
   fecha_reporte TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tabla de relación Alumno-Materia (materias cursando en el semestre)
+CREATE TABLE IF NOT EXISTS materias_alumno (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    alumno_id UUID REFERENCES alumnos(id) ON DELETE CASCADE,
+    materia_id UUID REFERENCES materias(id) ON DELETE CASCADE,
+    semestre INTEGER NOT NULL CHECK (semestre >= 1 AND semestre <= 12),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(alumno_id, materia_id, semestre)
 );
 
 -- Índices para optimizar consultas

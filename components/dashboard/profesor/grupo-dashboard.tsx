@@ -1,50 +1,95 @@
-"use client"
+"use client";
 
-import { DashboardLayout } from "@/components/dashboard/layout/dashboard-layout"
-import { Card, CardContent } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Users, Clock, Plus } from "lucide-react"
-import Link from "next/link"
-import { useEffect, useState } from "react"
-import { ListaAlumnos } from "./lista-alumnos"
-import { CalendarioSesiones } from "./calendario-sesiones"
-import { RegistroSesiones } from "./registro-sesiones"
-import { NuevaSesionDialog } from "./nueva-sesion-dialog"
+import { ArrowLeft, Clock, Plus, Users } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+import { DashboardLayout } from "@/components/dashboard/layout/dashboard-layout";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { createClient } from "@/lib/auth-client";
+
+import { CalendarioSesiones } from "./calendario-sesiones";
+import { ListaAlumnos } from "./lista-alumnos";
+import { NuevaSesionDialog } from "./nueva-sesion-dialog";
+import { RegistroSesiones } from "./registro-sesiones";
 
 interface GrupoDashboardProps {
-  grupoId: string
+  grupoId: string;
 }
 
 interface GrupoInfo {
-  id: string
-  nombre: string
-  semestre: number
-  horario_tutoria?: string
-  total_alumnos: number
-  alumnos_riesgo: number
+  id: string;
+  nombre: string;
+  semestre: number;
+  horario_tutoria?: string;
+  total_alumnos: number;
+  alumnos_riesgo: number;
 }
 
 export function GrupoDashboard({ grupoId }: GrupoDashboardProps) {
-  const [grupo, setGrupo] = useState<GrupoInfo | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [showNuevaSesion, setShowNuevaSesion] = useState(false)
+  const [grupo, setGrupo] = useState<GrupoInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showNuevaSesion, setShowNuevaSesion] = useState(false);
 
   useEffect(() => {
-    // Simulamos la carga de información del grupo
-    setTimeout(() => {
+    async function fetchGrupoInfo() {
+      setLoading(true);
+      const supabase = createClient();
+
+      // Obtener info del grupo
+      const { data: grupoDb } = await supabase
+        .from("grupos")
+        .select("*")
+        .eq("id", grupoId)
+        .single();
+
+      if (!grupoDb) {
+        setGrupo(null);
+        setLoading(false);
+        return;
+      }
+
+      // Obtener total de alumnos en el grupo actual
+      const { data: alumnosGrupo } = await supabase
+        .from("alumno_grupo")
+        .select("alumno_id")
+        .eq("grupo_id", grupoId)
+        .eq("activo", true);
+
+      const total_alumnos = alumnosGrupo ? alumnosGrupo.length : 0;
+
+      // Obtener alumnos en riesgo (materias_en_recurso > 0 o materias_en_especial > 0)
+      let alumnos_riesgo = 0;
+      if (alumnosGrupo && alumnosGrupo.length > 0) {
+        const alumnoIds = alumnosGrupo.map((ag: any) => ag.alumno_id);
+        const { data: alumnosInfo } = await supabase
+          .from("alumnos")
+          .select("id, materias_en_recurso, materias_en_especial")
+          .in("id", alumnoIds);
+        if (alumnosInfo) {
+          alumnos_riesgo = alumnosInfo.filter(
+            (a: any) =>
+              (a.materias_en_recurso ?? 0) > 0 ||
+              (a.materias_en_especial ?? 0) > 0
+          ).length;
+        }
+      }
+
       setGrupo({
-        id: grupoId,
-        nombre: "IEM-1A",
-        semestre: 1,
-        horario_tutoria: "Lunes 14:00-15:00",
-        total_alumnos: 28,
-        alumnos_riesgo: 3,
-      })
-      setLoading(false)
-    }, 1000)
-  }, [grupoId])
+        id: grupoDb.id,
+        nombre: grupoDb.nombre,
+        semestre: grupoDb.semestre,
+        horario_tutoria: grupoDb.horario_tutoria,
+        total_alumnos,
+        alumnos_riesgo,
+      });
+      setLoading(false);
+    }
+    fetchGrupoInfo();
+  }, [grupoId]);
 
   if (loading) {
     return (
@@ -55,7 +100,7 @@ export function GrupoDashboard({ grupoId }: GrupoDashboardProps) {
           <div className="h-96 bg-muted rounded"></div>
         </div>
       </DashboardLayout>
-    )
+    );
   }
 
   if (!grupo) {
@@ -68,7 +113,7 @@ export function GrupoDashboard({ grupoId }: GrupoDashboardProps) {
           </Button>
         </div>
       </DashboardLayout>
-    )
+    );
   }
 
   return (
@@ -94,11 +139,15 @@ export function GrupoDashboard({ grupoId }: GrupoDashboardProps) {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold">{grupo.nombre}</h1>
-                  <p className="text-muted-foreground">{grupo.semestre}° Semestre • Ingeniería Electromecánica</p>
+                  <p className="text-muted-foreground">
+                    {grupo.semestre}° Semestre • Ingeniería Electromecánica
+                  </p>
                   {grupo.horario_tutoria && (
                     <div className="flex items-center gap-2 mt-1">
                       <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">{grupo.horario_tutoria}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {grupo.horario_tutoria}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -106,7 +155,9 @@ export function GrupoDashboard({ grupoId }: GrupoDashboardProps) {
 
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Total de alumnos</p>
+                  <p className="text-sm text-muted-foreground">
+                    Total de alumnos
+                  </p>
                   <p className="text-2xl font-bold">{grupo.total_alumnos}</p>
                 </div>
                 {grupo.alumnos_riesgo > 0 && (
@@ -156,5 +207,5 @@ export function GrupoDashboard({ grupoId }: GrupoDashboardProps) {
         />
       </div>
     </DashboardLayout>
-  )
+  );
 }

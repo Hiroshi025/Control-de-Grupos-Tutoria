@@ -1,26 +1,14 @@
 "use client";
 
-import {
-  Edit,
-  Eye,
-  GraduationCap,
-  Plus,
-  Search,
-  Trash2,
-  Users,
-} from "lucide-react";
+import { Edit, Eye, GraduationCap, Plus, Search, Trash2, Users } from "lucide-react";
+import Papa from "papaparse";
 import { useEffect, useState } from "react";
+import * as XLSX from "xlsx";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createClient } from "@/lib/auth-client";
@@ -52,6 +40,7 @@ export function GestionUsuarios() {
   const [tipoUsuario, setTipoUsuario] = useState<"alumno" | "profesor">(
     "alumno"
   );
+  const [archivoCarga, setArchivoCarga] = useState<File | null>(null);
 
   // Cargar datos reales
   useEffect(() => {
@@ -142,6 +131,15 @@ export function GestionUsuarios() {
     setLoading(true);
 
     if (tipo === "alumno") {
+      // Obtener el id de la carrera de electromecánica
+      const { data: carreraData } = await supabase
+        .from("carreras")
+        .select("id")
+        .eq("codigo", "IEME-2010-210")
+        .single();
+
+      const carrera_id = carreraData?.id ?? null;
+
       const { error: dbError } = await supabase.from("alumnos").insert([
         {
           nombre_completo: data.nombre_completo,
@@ -152,9 +150,9 @@ export function GestionUsuarios() {
           materias_aprobadas: 0,
           materias_en_recurso: 0,
           foto_credencial: null,
-          password_hash: data.password, // puedes guardar la contraseña aquí
+          password_hash: data.password,
           fecha_inscripcion: new Date().toISOString().slice(0, 10),
-          carrera_id: null,
+          carrera_id, // Asignar carrera de electromecánica
         },
       ]);
       if (dbError) {
@@ -213,6 +211,235 @@ export function GestionUsuarios() {
     setTimeout(() => window.location.reload(), 500);
   }
 
+  // Validar campos requeridos
+  function validarAlumno(obj: any) {
+    const camposObligatorios = [
+      "nombre_completo",
+      "correo_institucional",
+      "edad",
+      "matricula",
+      "semestre_actual",
+    ];
+    for (const campo of camposObligatorios) {
+      if (
+        obj[campo] === undefined ||
+        obj[campo] === null ||
+        obj[campo].toString().trim() === ""
+      ) {
+        return `Falta el campo obligatorio: ${campo}`;
+      }
+    }
+    // Validaciones específicas
+    if (
+      isNaN(Number(obj.edad)) ||
+      Number(obj.edad) < 15 ||
+      Number(obj.edad) > 100
+    ) {
+      return "La edad debe ser un número válido entre 15 y 100";
+    }
+    if (
+      isNaN(Number(obj.semestre_actual)) ||
+      Number(obj.semestre_actual) < 1 ||
+      Number(obj.semestre_actual) > 12
+    ) {
+      return "El semestre debe ser un número válido entre 1 y 12";
+    }
+    // Email simple
+    if (!/^[\w-.]+@[\w-]+\.[a-zA-Z]{2,}$/.test(obj.correo_institucional)) {
+      return "El correo institucional no tiene un formato válido";
+    }
+    return null;
+  }
+
+  // Validar campos requeridos para profesor
+  function validarProfesor(obj: any) {
+    const camposObligatorios = [
+      "nombre_completo",
+      "correo_institucional",
+      "edad",
+      "password",
+    ];
+    for (const campo of camposObligatorios) {
+      if (
+        obj[campo] === undefined ||
+        obj[campo] === null ||
+        obj[campo].toString().trim() === ""
+      ) {
+        return `Falta el campo obligatorio: ${campo}`;
+      }
+    }
+    if (
+      isNaN(Number(obj.edad)) ||
+      Number(obj.edad) < 18 ||
+      Number(obj.edad) > 100
+    ) {
+      return "La edad debe ser un número válido entre 18 y 100";
+    }
+    if (!/^[\w-.]+@[\w-]+\.[a-zA-Z]{2,}$/.test(obj.correo_institucional)) {
+      return "El correo institucional no tiene un formato válido";
+    }
+    return null;
+  }
+
+  // Procesar archivo y crear alumnos en lote
+  async function handleArchivoCarga(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setArchivoCarga(file);
+
+    let alumnosBatch: any[] = [];
+    let errorArchivo: string | null = null;
+
+    try {
+      if (file.name.endsWith(".csv")) {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: async (result) => {
+            alumnosBatch = result.data;
+            errorArchivo = await crearAlumnosBatch(alumnosBatch);
+            if (errorArchivo) alert(errorArchivo);
+          },
+        });
+      } else if (file.name.endsWith(".json")) {
+        const text = await file.text();
+        alumnosBatch = JSON.parse(text);
+        errorArchivo = await crearAlumnosBatch(alumnosBatch);
+        if (errorArchivo) alert(errorArchivo);
+      } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        alumnosBatch = XLSX.utils.sheet_to_json(sheet);
+        errorArchivo = await crearAlumnosBatch(alumnosBatch);
+        if (errorArchivo) alert(errorArchivo);
+      } else {
+        alert(
+          "Formato de archivo no soportado. Solo se permiten .csv, .json, .xlsx, .xls"
+        );
+      }
+    } catch (err: any) {
+      alert("Error al procesar el archivo: " + err.message);
+    }
+  }
+
+  // Crear alumnos en lote con validación
+  async function crearAlumnosBatch(alumnos: any[]): Promise<string | null> {
+    if (!Array.isArray(alumnos) || alumnos.length === 0) {
+      return "El archivo no contiene registros válidos.";
+    }
+    // Validar cada alumno
+    for (let i = 0; i < alumnos.length; i++) {
+      const error = validarAlumno(alumnos[i]);
+      if (error) {
+        return `Error en el registro ${i + 1}: ${error}`;
+      }
+    }
+    const supabase = createClient();
+    setLoading(true);
+    const alumnosFormateados = alumnos.map((a) => ({
+      nombre_completo: a.nombre_completo.trim(),
+      correo_institucional: a.correo_institucional.trim(),
+      edad: Number(a.edad),
+      matricula: a.matricula.trim(),
+      semestre_actual: Number(a.semestre_actual),
+      materias_aprobadas: 0,
+      materias_en_recurso: 0,
+      foto_credencial: null,
+      password_hash: a.password ? a.password.trim() : "123456",
+      fecha_inscripcion: new Date().toISOString().slice(0, 10),
+      carrera_id: null,
+    }));
+    const { error } = await supabase.from("alumnos").insert(alumnosFormateados);
+    setLoading(false);
+    if (error) {
+      return "Error al cargar alumnos: " + error.message;
+    }
+    alert("Alumnos cargados correctamente");
+    setTimeout(() => window.location.reload(), 500);
+    return null;
+  }
+
+  // Procesar archivo y crear profesores en lote
+  async function handleArchivoCargaProfesores(
+    e: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setArchivoCarga(file);
+
+    let profesoresBatch: any[] = [];
+    let errorArchivo: string | null = null;
+
+    try {
+      if (file.name.endsWith(".csv")) {
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: async (result) => {
+            profesoresBatch = result.data;
+            errorArchivo = await crearProfesoresBatch(profesoresBatch);
+            if (errorArchivo) alert(errorArchivo);
+          },
+        });
+      } else if (file.name.endsWith(".json")) {
+        const text = await file.text();
+        profesoresBatch = JSON.parse(text);
+        errorArchivo = await crearProfesoresBatch(profesoresBatch);
+        if (errorArchivo) alert(errorArchivo);
+      } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        profesoresBatch = XLSX.utils.sheet_to_json(sheet);
+        errorArchivo = await crearProfesoresBatch(profesoresBatch);
+        if (errorArchivo) alert(errorArchivo);
+      } else {
+        alert(
+          "Formato de archivo no soportado. Solo se permiten .csv, .json, .xlsx, .xls"
+        );
+      }
+    } catch (err: any) {
+      alert("Error al procesar el archivo: " + err.message);
+    }
+  }
+
+  // Crear profesores en lote con validación
+  async function crearProfesoresBatch(
+    profesores: any[]
+  ): Promise<string | null> {
+    if (!Array.isArray(profesores) || profesores.length === 0) {
+      return "El archivo no contiene registros válidos.";
+    }
+    for (let i = 0; i < profesores.length; i++) {
+      const error = validarProfesor(profesores[i]);
+      if (error) {
+        return `Error en el registro ${i + 1}: ${error}`;
+      }
+    }
+    const supabase = createClient();
+    setLoading(true);
+    const profesoresFormateados = profesores.map((p) => ({
+      nombre_completo: p.nombre_completo.trim(),
+      correo_institucional: p.correo_institucional.trim(),
+      edad: Number(p.edad),
+      foto_perfil: null,
+      password_hash: p.password ? p.password.trim() : "123456",
+    }));
+    const { error } = await supabase
+      .from("profesores")
+      .insert(profesoresFormateados);
+    setLoading(false);
+    if (error) {
+      return "Error al cargar profesores: " + error.message;
+    }
+    alert("Profesores cargados correctamente");
+    setTimeout(() => window.location.reload(), 500);
+    return null;
+  }
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="alumnos" className="space-y-6">
@@ -248,6 +475,16 @@ export function GestionUsuarios() {
                     <Plus className="h-4 w-4 mr-2" />
                     Nuevo Alumno
                   </Button>
+                  {/* Botón para cargar archivo de alumnos */}
+                  <label className="cursor-pointer bg-primary text-white px-4 py-2 rounded hover:bg-primary/80">
+                    Cargar archivo
+                    <input
+                      type="file"
+                      accept=".csv,.json,.xlsx,.xls"
+                      style={{ display: "none" }}
+                      onChange={handleArchivoCarga}
+                    />
+                  </label>
                 </div>
               </div>
             </CardHeader>
@@ -364,6 +601,16 @@ export function GestionUsuarios() {
                     <Plus className="h-4 w-4 mr-2" />
                     Nuevo Profesor
                   </Button>
+                  {/* Botón para cargar archivo de profesores */}
+                  <label className="cursor-pointer bg-primary text-white px-4 py-2 rounded hover:bg-primary/80">
+                    Cargar archivo
+                    <input
+                      type="file"
+                      accept=".csv,.json,.xlsx,.xls"
+                      style={{ display: "none" }}
+                      onChange={handleArchivoCargaProfesores}
+                    />
+                  </label>
                 </div>
               </div>
             </CardHeader>

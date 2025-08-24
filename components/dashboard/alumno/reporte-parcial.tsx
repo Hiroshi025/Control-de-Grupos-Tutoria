@@ -25,6 +25,7 @@ export function ReporteParcial({ alumnoId }: { alumnoId: string }) {
   const [semestreActual, setSemestreActual] = useState<number>(1);
   const [totalMateriasSemestre, setTotalMateriasSemestre] = useState<number>(0);
   const [excelProgress, setExcelProgress] = useState<number>(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Obtener reportes enviados y datos del alumno
   useEffect(() => {
@@ -79,34 +80,73 @@ export function ReporteParcial({ alumnoId }: { alumnoId: string }) {
   // Envío de formulario web
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    const supabase = createClient();
+    setErrorMsg(null);
 
-    // Filtrar materias llenas
+    // Validaciones
+    if (!parcial) {
+      setErrorMsg("Selecciona el parcial a reportar.");
+      return;
+    }
+    if (materias.length === 0) {
+      setErrorMsg("Agrega al menos una materia.");
+      return;
+    }
     const materiasReprobadas = materias.filter(
-      (m) => m.materia && m.motivo && m.profesor
+      (m) => m.materia.trim() && m.motivo.trim() && m.profesor.trim()
     );
-    // Insertar cada materia reprobada como reporte
-    await supabase.from("reportes_parciales").insert(
-      materiasReprobadas.map((m) => ({
-        ...m,
-        parcial: Number(parcial),
-        alumno_id: alumnoId,
-        semestre: String(semestreActual),
-      }))
-    );
+    if (materiasReprobadas.length === 0) {
+      setErrorMsg("Completa todos los campos de las materias.");
+      return;
+    }
+    if (materiasReprobadas.length > MAX_MATERIAS) {
+      setErrorMsg(`No puedes reportar más de ${MAX_MATERIAS} materias.`);
+      return;
+    }
 
-    // Calcular materias aprobadas y actualizar alumno
-    const materiasAprobadas = totalMateriasSemestre - materiasReprobadas.length;
-    await supabase
-      .from("alumnos")
-      .update({ materias_aprobadas: materiasAprobadas })
-      .eq("id", alumnoId);
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      // Insertar cada materia reprobada como reporte
+      const { error: insertError } = await supabase
+        .from("reportes_parciales")
+        .insert(
+          materiasReprobadas.map((m) => ({
+            ...m,
+            parcial: Number(parcial),
+            alumno_id: alumnoId,
+            semestre: String(semestreActual),
+          }))
+        );
+      if (insertError) {
+        setErrorMsg("Error al enviar el reporte: " + insertError.message);
+        setLoading(false);
+        return;
+      }
 
-    setLoading(false);
-    setMaterias([{ materia: "", motivo: "", profesor: "" }]);
-    setParcial("");
-    alert("Reporte enviado");
+      // Calcular materias aprobadas y actualizar alumno
+      const materiasAprobadas =
+        totalMateriasSemestre - materiasReprobadas.length;
+      const { error: updateError } = await supabase
+        .from("alumnos")
+        .update({ materias_aprobadas: materiasAprobadas })
+        .eq("id", alumnoId);
+      if (updateError) {
+        setErrorMsg(
+          "Error al actualizar el estado académico: " + updateError.message
+        );
+        setLoading(false);
+        return;
+      }
+
+      setLoading(false);
+      setMaterias([{ materia: "", motivo: "", profesor: "" }]);
+      setParcial("");
+      setErrorMsg(null);
+      alert("Reporte enviado correctamente");
+    } catch (err: any) {
+      setErrorMsg("Error inesperado al enviar el reporte.");
+      setLoading(false);
+    }
   };
 
   // Carga de archivo Excel con barra de progreso
@@ -236,6 +276,11 @@ export function ReporteParcial({ alumnoId }: { alumnoId: string }) {
             {loading ? "Enviando..." : "Enviar Reporte"}
           </Button>
         </div>
+        {errorMsg && (
+          <div className="text-red-600 text-sm font-semibold mb-2">
+            {errorMsg}
+          </div>
+        )}
       </form>
       <div className="bg-white p-4 rounded-lg shadow space-y-2">
         <label className="block font-medium mb-1 flex items-center gap-2">

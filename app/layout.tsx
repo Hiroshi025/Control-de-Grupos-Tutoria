@@ -36,6 +36,9 @@ export default function RootLayout({
       lang="es"
       className={`${geist.variable} ${manrope.variable} antialiased`}
     >
+      <head>
+        <link rel="icon" href="/logo.png" type="image/png" />
+      </head>
       <body>
         <AuthProvider>{children}</AuthProvider>
       </body>

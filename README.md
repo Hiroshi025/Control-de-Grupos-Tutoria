@@ -239,3 +239,45 @@ Para soporte técnico o consultas sobre el sistema, contactar al administrador d
 - El alumno reporta en cada parcial las materias reprobadas.
 - Al finalizar el semestre, el sistema ajusta la carga académica y el historial del alumno.
 - Si una materia es reprobada dos veces, se considera especial y requiere atención adicional en el siguiente semestre.
+
+En Supabase/PostgreSQL, puedes automatizar el reseteo de `materias_actualmente_cursando` usando una **función y un job programado** (pg_cron o Supabase Scheduled Functions).
+
+### Opción 1: Usar Supabase Scheduled Functions (recomendado en Supabase)
+
+1. **Crea una función SQL para resetear el campo:**
+````sql
+CREATE OR REPLACE FUNCTION reset_materias_actualmente_cursando()
+RETURNS void AS $$
+BEGIN
+  UPDATE alumnos
+  SET materias_actualmente_cursando = 0
+  WHERE id IN (
+    SELECT ag.alumno_id
+    FROM alumno_grupo ag
+    JOIN grupos g ON ag.grupo_id = g.id
+    WHERE g.fin_de_semestre <= CURRENT_DATE
+      AND ag.activo = true
+  );
+END;
+$$ LANGUAGE plpgsql;
+````
+
+2. **Programa la función desde Supabase Studio:**
+   - Ve a "Scheduled Functions" y crea una tarea que ejecute `SELECT reset_materias_actualmente_cursando();` cada día o al final de cada semestre.
+
+---
+
+### Opción 2: Usar pg_cron (si tienes acceso al servidor)
+
+1. Instala la extensión `pg_cron` en tu base de datos.
+2. Programa el job:
+````sql
+SELECT cron.schedule('reset-materias', '0 0 * * *', $$SELECT reset_materias_actualmente_cursando();$$);
+````
+
+---
+
+**Resumen:**  
+La tarea programada ejecuta la función cada día (o cuando lo definas), y resetea el campo para los alumnos cuyo grupo terminó el semestre. Así no necesitas hacerlo manualmente.
+
+¿Quieres el ejemplo para Supabase Edge Functions (TypeScript) también?

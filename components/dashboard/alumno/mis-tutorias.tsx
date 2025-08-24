@@ -5,13 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/auth-client";
 
 interface MisTutoriasProps {
@@ -30,30 +24,60 @@ interface SesionTutoria {
 export function MisTutorias({ alumnoId }: MisTutoriasProps) {
   const [sesiones, setSesiones] = useState<SesionTutoria[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchSesiones() {
       setLoading(true);
+      setErrorMsg(null);
       try {
         const supabase = createClient();
-        // Buscar sesiones individuales y grupales del alumno
-        const { data: sesionesData, error } = await supabase
+
+        // Buscar sesiones individuales del alumno
+        const { data: sesionesInd, error: errorInd } = await supabase
           .from("sesiones_tutoria")
           .select(
             "id, fecha_sesion, tipo, objetivos, acuerdos_compromisos, profesor_id"
           )
-          .or(`alumno_id.eq.${alumnoId},tipo.eq.grupal`)
+          .eq("alumno_id", alumnoId)
           .order("fecha_sesion", { ascending: false });
 
-        if (!sesionesData || error) {
-          setSesiones([]);
-          setLoading(false);
-          return;
+        // Buscar sesiones grupales del grupo al que pertenece el alumno
+        const { data: alumnoGrupo } = await supabase
+          .from("alumno_grupo")
+          .select("grupo_id")
+          .eq("alumno_id", alumnoId)
+          .eq("activo", true)
+          .single();
+
+        let sesionesGrup: any[] = [];
+        if (alumnoGrupo?.grupo_id) {
+          const { data: grupales, error: errorGrup } = await supabase
+            .from("sesiones_tutoria")
+            .select(
+              "id, fecha_sesion, tipo, objetivos, acuerdos_compromisos, profesor_id"
+            )
+            .eq("grupo_id", alumnoGrupo.grupo_id)
+            .eq("tipo", "grupal")
+            .order("fecha_sesion", { ascending: false });
+          if (errorGrup) setErrorMsg("Error al obtener sesiones grupales.");
+          sesionesGrup = grupales || [];
         }
+
+        // Unir ambas listas y eliminar duplicados por id
+        const todasSesiones = [...(sesionesInd || []), ...sesionesGrup];
+        const sesionesUnicas = Object.values(
+          todasSesiones.reduce((acc: any, sesion: any) => {
+            acc[sesion.id] = sesion;
+            return acc;
+          }, {})
+        );
 
         // Obtener nombres de profesores
         const profesorIds = [
-          ...new Set(sesionesData.map((s: any) => s.profesor_id)),
+          ...new Set(
+            sesionesUnicas.map((s: any) => s.profesor_id).filter(Boolean)
+          ),
         ];
         let profesoresMap: Record<string, string> = {};
         if (profesorIds.length > 0) {
@@ -68,7 +92,7 @@ export function MisTutorias({ alumnoId }: MisTutoriasProps) {
         }
 
         setSesiones(
-          sesionesData.map((sesion: any) => ({
+          sesionesUnicas.map((sesion: any) => ({
             id: sesion.id,
             fecha_sesion: sesion.fecha_sesion,
             tipo: sesion.tipo,
@@ -79,6 +103,7 @@ export function MisTutorias({ alumnoId }: MisTutoriasProps) {
         );
       } catch (err) {
         setSesiones([]);
+        setErrorMsg("Error de conexión con la base de datos.");
       }
       setLoading(false);
     }
@@ -110,6 +135,9 @@ export function MisTutorias({ alumnoId }: MisTutoriasProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {errorMsg && (
+          <p className="text-red-600 text-center py-2">{errorMsg}</p>
+        )}
         {sesiones.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">
             No hay sesiones de tutoría registradas

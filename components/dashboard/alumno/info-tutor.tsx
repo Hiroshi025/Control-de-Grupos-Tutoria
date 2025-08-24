@@ -5,13 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/auth-client";
 
 interface InfoTutorProps {
@@ -28,10 +22,12 @@ interface TutorInfo {
 export function InfoTutor({ alumnoId }: InfoTutorProps) {
   const [tutor, setTutor] = useState<TutorInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchTutor() {
       setLoading(true);
+      setErrorMsg(null);
       const supabase = createClient();
 
       // 1. Buscar el grupo activo del alumno
@@ -44,6 +40,7 @@ export function InfoTutor({ alumnoId }: InfoTutorProps) {
 
       if (errorAlumnoGrupo || !alumnoGrupo) {
         setTutor(null);
+        setErrorMsg("No se encontró grupo activo para el alumno.");
         setLoading(false);
         return;
       }
@@ -58,6 +55,7 @@ export function InfoTutor({ alumnoId }: InfoTutorProps) {
 
       if (errorProfesorGrupo || !profesorGrupo) {
         setTutor(null);
+        setErrorMsg("No se encontró tutor asignado al grupo.");
         setLoading(false);
         return;
       }
@@ -69,18 +67,19 @@ export function InfoTutor({ alumnoId }: InfoTutorProps) {
         .eq("id", profesorGrupo.profesor_id)
         .single();
 
+      if (errorProfesor || !profesor) {
+        setTutor(null);
+        setErrorMsg("No se encontró información del tutor.");
+        setLoading(false);
+        return;
+      }
+
       // 4. Obtener horario de tutoría del grupo
       const { data: grupo, error: errorGrupo } = await supabase
         .from("grupos")
         .select("horario_tutoria")
         .eq("id", profesorGrupo.grupo_id)
         .single();
-
-      if (errorProfesor || !profesor) {
-        setTutor(null);
-        setLoading(false);
-        return;
-      }
 
       setTutor({
         nombre_completo: profesor.nombre_completo,
@@ -117,7 +116,9 @@ export function InfoTutor({ alumnoId }: InfoTutorProps) {
           <CardTitle>Tutor Asignado</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">No hay tutor asignado</p>
+          <p className="text-muted-foreground">
+            {errorMsg || "No hay tutor asignado"}
+          </p>
         </CardContent>
       </Card>
     );
